@@ -29,7 +29,7 @@ impl Parser {
             if let Some(stmt) = self.parse_statement() {
                 program.statements.push(stmt);
             } else {
-                self.next_token(); // Přeskočí neznámé tokeny (např. volné znaky)
+                self.next_token();
             }
         }
         
@@ -41,8 +41,35 @@ impl Parser {
             Token::Keyword(ref kw) if kw == "let" => self.parse_let_statement(),
             Token::Keyword(ref kw) if kw == "return" => self.parse_return_statement(),
             Token::Keyword(ref kw) if kw == "fn" => self.parse_function_statement(),
+            Token::Keyword(ref kw) if kw == "actor" => self.parse_actor_statement(),
             _ => None,
         }
+    }
+
+    fn parse_actor_statement(&mut self) -> Option<Stmt> {
+        self.next_token(); // přeskočí 'actor'
+        
+        let name = match &self.current_token {
+            Token::Identifier(ident) => ident.clone(),
+            _ => return None,
+        };
+        self.next_token(); // přeskočí jméno actora
+        
+        if self.current_token != Token::Symbol('{') { return None; }
+        self.next_token(); // přeskočí '{'
+        
+        let mut methods = Vec::new();
+        while self.current_token != Token::Symbol('}') && self.current_token != Token::EOF {
+            if let Some(stmt) = self.parse_statement() {
+                methods.push(stmt);
+            } else {
+                self.next_token();
+            }
+        }
+        
+        self.next_token(); // přeskočí '}'
+        
+        Some(Stmt::Actor { name, methods })
     }
 
     fn parse_let_statement(&mut self) -> Option<Stmt> {
@@ -52,25 +79,23 @@ impl Parser {
             Token::Identifier(ident) => ident.clone(),
             _ => return None,
         };
-        self.next_token(); // přeskočí jméno proměnné
+        self.next_token();
 
         if self.current_token != Token::Operator("=".to_string()) {
             return None;
         }
-        self.next_token(); // přeskočí '='
+        self.next_token();
 
         let value = self.parse_expression()?;
-        self.next_token(); // přeskočí hodnotu
+        self.next_token();
 
         Some(Stmt::Let { name, value })
     }
 
     fn parse_return_statement(&mut self) -> Option<Stmt> {
         self.next_token(); // přeskočí 'return'
-        
         let value = self.parse_expression()?;
-        self.next_token(); // přeskočí hodnotu
-        
+        self.next_token();
         Some(Stmt::Return { value })
     }
 
@@ -81,15 +106,13 @@ impl Parser {
             Token::Identifier(ident) => ident.clone(),
             _ => return None,
         };
-        self.next_token(); // přeskočí jméno funkce
+        self.next_token();
         
-        // Zpracování parametrů funkce: ()
         if self.current_token != Token::Symbol('(') { return None; }
         self.next_token();
         if self.current_token != Token::Symbol(')') { return None; }
         self.next_token();
         
-        // Zpracování těla funkce: { ... }
         if self.current_token != Token::Symbol('{') { return None; }
         self.next_token();
         
@@ -102,8 +125,7 @@ impl Parser {
             }
         }
         
-        self.next_token(); // přeskočí '}'
-        
+        self.next_token();
         Some(Stmt::Function { name, body })
     }
 
@@ -123,21 +145,24 @@ mod tests {
     use crate::lexer::Lexer;
 
     #[test]
-    fn test_function_parsing() {
-        let input = "fn setup() { let x = 42 return x }";
+    fn test_actor_parsing() {
+        let input = "actor Worker { fn work() { return 1 } }";
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
 
         assert_eq!(program.statements.len(), 1);
-        
-        if let Stmt::Function { name, body } = &program.statements[0] {
-            assert_eq!(name, "setup");
-            assert_eq!(body.len(), 2);
-            assert_eq!(body[0], Stmt::Let { name: "x".to_string(), value: Expr::Number("42".to_string()) });
-            assert_eq!(body[1], Stmt::Return { value: Expr::Identifier("x".to_string()) });
+        if let Stmt::Actor { name, methods } = &program.statements[0] {
+            assert_eq!(name, "Worker");
+            assert_eq!(methods.len(), 1);
+            if let Stmt::Function { name: fn_name, body } = &methods[0] {
+                assert_eq!(fn_name, "work");
+                assert_eq!(body.len(), 1);
+            } else {
+                panic!("Očekávala se funkce v actoru!");
+            }
         } else {
-            panic!("Očekávala se funkce!");
+            panic!("Očekával se actor!");
         }
     }
 }

@@ -8,12 +8,13 @@ use parser::Parser;
 fn main() {
     println!("Aether Compiler v0.1.0");
     
-    // Nyní již kompilátor rozumí plnohodnotným funkcím a blokům!
+    // Nyní náš kompilátor dokáže rozložit celý koncept Aetheru!
     let source_code = r#"
-        fn start_engine() {
-            let status = "Running"
-            let power = 100
-            return status
+        actor DataMiner {
+            fn extract() {
+                let status = "mining"
+                return status
+            }
         }
     "#;
 
