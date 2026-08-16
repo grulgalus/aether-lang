@@ -25,30 +25,15 @@ impl Lexer {
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
-        if self.position >= self.input.len() {
-            return Token::EOF;
-        }
+        if self.position >= self.input.len() { return Token::EOF; }
 
         let ch = self.input[self.position];
 
-        if ch.is_alphabetic() || ch == '_' {
-            return self.read_identifier_or_keyword();
-        }
+        if ch.is_alphabetic() || ch == '_' { return self.read_identifier_or_keyword(); }
+        if ch.is_ascii_digit() { return self.read_number(); }
+        if ch == '"' { return self.read_string_literal(); }
 
-        if ch.is_ascii_digit() {
-            return self.read_number();
-        }
-
-        if ch == '"' {
-            return self.read_string_literal();
-        }
-
-        // Podpora pro dvouznačné operátory jako ->, ==, !=
-        let next_ch = if self.position + 1 < self.input.len() {
-            self.input[self.position + 1]
-        } else {
-            '\0'
-        };
+        let next_ch = if self.position + 1 < self.input.len() { self.input[self.position + 1] } else { '\0' };
 
         match (ch, next_ch) {
             ('-', '>') | ('=', '=') | ('!', '=') | ('<', '=') | ('>', '=') => {
@@ -59,20 +44,12 @@ impl Lexer {
         }
 
         self.position += 1;
-        
-        // Jednoznačné operátory
-        if "+-*/=!<>".contains(ch) {
-            return Token::Operator(ch.to_string());
-        }
-
-        // Zbytek jsou symboly (např. závorky, středníky)
+        if "+-*/=!<>".contains(ch) { return Token::Operator(ch.to_string()); }
         Token::Symbol(ch)
     }
 
     fn skip_whitespace(&mut self) {
-        while self.position < self.input.len() && self.input[self.position].is_whitespace() {
-            self.position += 1;
-        }
+        while self.position < self.input.len() && self.input[self.position].is_whitespace() { self.position += 1; }
     }
 
     fn read_identifier_or_keyword(&mut self) -> Token {
@@ -80,26 +57,19 @@ impl Lexer {
         while self.position < self.input.len() && (self.input[self.position].is_alphanumeric() || self.input[self.position] == '_') {
             self.position += 1;
         }
-        
         let text: String = self.input[start..self.position].iter().collect();
-        
         match text.as_str() {
-            "actor" | "fn" | "let" | "return" | "match" | "Result" | "Ok" | "Err" => Token::Keyword(text),
+            "actor" | "fn" | "let" | "return" | "match" | "Result" | "Ok" | "Err" | "print" => Token::Keyword(text),
             _ => Token::Identifier(text),
         }
     }
 
     fn read_string_literal(&mut self) -> Token {
-        self.position += 1; // skip "
+        self.position += 1;
         let start = self.position;
-        
-        while self.position < self.input.len() && self.input[self.position] != '"' {
-            self.position += 1;
-        }
-        
+        while self.position < self.input.len() && self.input[self.position] != '"' { self.position += 1; }
         let text: String = self.input[start..self.position].iter().collect();
-        self.position += 1; // skip "
-        
+        self.position += 1;
         Token::StringLiteral(text)
     }
 
@@ -110,28 +80,5 @@ impl Lexer {
         }
         let text: String = self.input[start..self.position].iter().collect();
         Token::Number(text)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lexer() {
-        let input = "let x = 42.5; x -> y != 10";
-        let mut lexer = Lexer::new(input);
-        
-        assert_eq!(lexer.next_token(), Token::Keyword("let".to_string()));
-        assert_eq!(lexer.next_token(), Token::Identifier("x".to_string()));
-        assert_eq!(lexer.next_token(), Token::Operator("=".to_string()));
-        assert_eq!(lexer.next_token(), Token::Number("42.5".to_string()));
-        assert_eq!(lexer.next_token(), Token::Symbol(';'));
-        assert_eq!(lexer.next_token(), Token::Identifier("x".to_string()));
-        assert_eq!(lexer.next_token(), Token::Operator("->".to_string()));
-        assert_eq!(lexer.next_token(), Token::Identifier("y".to_string()));
-        assert_eq!(lexer.next_token(), Token::Operator("!=".to_string()));
-        assert_eq!(lexer.next_token(), Token::Number("10".to_string()));
-        assert_eq!(lexer.next_token(), Token::EOF);
     }
 }

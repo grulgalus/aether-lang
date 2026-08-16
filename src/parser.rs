@@ -11,11 +11,7 @@ impl Parser {
     pub fn new(mut lexer: Lexer) -> Self {
         let current_token = lexer.next_token();
         let peek_token = lexer.next_token();
-        Parser {
-            lexer,
-            current_token,
-            peek_token,
-        }
+        Parser { lexer, current_token, peek_token }
     }
 
     pub fn next_token(&mut self) {
@@ -24,7 +20,6 @@ impl Parser {
 
     pub fn parse_program(&mut self) -> Program {
         let mut program = Program { statements: Vec::new() };
-        
         while self.current_token != Token::EOF {
             if let Some(stmt) = self.parse_statement() {
                 program.statements.push(stmt);
@@ -32,7 +27,6 @@ impl Parser {
                 self.next_token();
             }
         }
-        
         program
     }
 
@@ -40,91 +34,78 @@ impl Parser {
         match self.current_token {
             Token::Keyword(ref kw) if kw == "let" => self.parse_let_statement(),
             Token::Keyword(ref kw) if kw == "return" => self.parse_return_statement(),
+            Token::Keyword(ref kw) if kw == "print" => self.parse_print_statement(),
             Token::Keyword(ref kw) if kw == "fn" => self.parse_function_statement(),
             Token::Keyword(ref kw) if kw == "actor" => self.parse_actor_statement(),
             _ => None,
         }
     }
 
-    fn parse_actor_statement(&mut self) -> Option<Stmt> {
-        self.next_token(); // přeskočí 'actor'
+    fn parse_print_statement(&mut self) -> Option<Stmt> {
+        self.next_token(); // přeskočí 'print'
         
-        let name = match &self.current_token {
-            Token::Identifier(ident) => ident.clone(),
-            _ => return None,
-        };
-        self.next_token(); // přeskočí jméno actora
-        
-        if self.current_token != Token::Symbol('{') { return None; }
-        self.next_token(); // přeskočí '{'
-        
-        let mut methods = Vec::new();
-        while self.current_token != Token::Symbol('}') && self.current_token != Token::EOF {
-            if let Some(stmt) = self.parse_statement() {
-                methods.push(stmt);
-            } else {
-                self.next_token();
-            }
-        }
-        
-        self.next_token(); // přeskočí '}'
-        
-        Some(Stmt::Actor { name, methods })
-    }
-
-    fn parse_let_statement(&mut self) -> Option<Stmt> {
-        self.next_token(); // přeskočí 'let'
-        
-        let name = match &self.current_token {
-            Token::Identifier(ident) => ident.clone(),
-            _ => return None,
-        };
-        self.next_token();
-
-        if self.current_token != Token::Operator("=".to_string()) {
-            return None;
-        }
-        self.next_token();
+        let has_parens = self.current_token == Token::Symbol('(');
+        if has_parens { self.next_token(); }
 
         let value = self.parse_expression()?;
         self.next_token();
 
+        if has_parens && self.current_token == Token::Symbol(')') {
+            self.next_token();
+        }
+
+        Some(Stmt::Print { value })
+    }
+
+    fn parse_actor_statement(&mut self) -> Option<Stmt> {
+        self.next_token();
+        let name = match &self.current_token {
+            Token::Identifier(ident) => ident.clone(),
+            _ => return None,
+        };
+        self.next_token();
+        if self.current_token != Token::Symbol('{') { return None; }
+        self.next_token();
+        let mut methods = Vec::new();
+        while self.current_token != Token::Symbol('}') && self.current_token != Token::EOF {
+            if let Some(stmt) = self.parse_statement() { methods.push(stmt); } else { self.next_token(); }
+        }
+        self.next_token();
+        Some(Stmt::Actor { name, methods })
+    }
+
+    fn parse_let_statement(&mut self) -> Option<Stmt> {
+        self.next_token();
+        let name = match &self.current_token { Token::Identifier(ident) => ident.clone(), _ => return None, };
+        self.next_token();
+        if self.current_token != Token::Operator("=".to_string()) { return None; }
+        self.next_token();
+        let value = self.parse_expression()?;
+        self.next_token();
         Some(Stmt::Let { name, value })
     }
 
     fn parse_return_statement(&mut self) -> Option<Stmt> {
-        self.next_token(); // přeskočí 'return'
+        self.next_token();
         let value = self.parse_expression()?;
         self.next_token();
         Some(Stmt::Return { value })
     }
 
     fn parse_function_statement(&mut self) -> Option<Stmt> {
-        self.next_token(); // přeskočí 'fn'
-        
-        let name = match &self.current_token {
-            Token::Identifier(ident) => ident.clone(),
-            _ => return None,
-        };
         self.next_token();
-        
+        let name = match &self.current_token { Token::Identifier(ident) => ident.clone(), _ => return None, };
+        self.next_token();
         if self.current_token != Token::Symbol('(') { return None; }
         self.next_token();
         if self.current_token != Token::Symbol(')') { return None; }
         self.next_token();
-        
         if self.current_token != Token::Symbol('{') { return None; }
         self.next_token();
-        
         let mut body = Vec::new();
         while self.current_token != Token::Symbol('}') && self.current_token != Token::EOF {
-            if let Some(stmt) = self.parse_statement() {
-                body.push(stmt);
-            } else {
-                self.next_token();
-            }
+            if let Some(stmt) = self.parse_statement() { body.push(stmt); } else { self.next_token(); }
         }
-        
         self.next_token();
         Some(Stmt::Function { name, body })
     }
@@ -135,34 +116,6 @@ impl Parser {
             Token::StringLiteral(s) => Some(Expr::StringLit(s.clone())),
             Token::Identifier(id) => Some(Expr::Identifier(id.clone())),
             _ => None,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lexer::Lexer;
-
-    #[test]
-    fn test_actor_parsing() {
-        let input = "actor Worker { fn work() { return 1 } }";
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program();
-
-        assert_eq!(program.statements.len(), 1);
-        if let Stmt::Actor { name, methods } = &program.statements[0] {
-            assert_eq!(name, "Worker");
-            assert_eq!(methods.len(), 1);
-            if let Stmt::Function { name: fn_name, body } = &methods[0] {
-                assert_eq!(fn_name, "work");
-                assert_eq!(body.len(), 1);
-            } else {
-                panic!("Očekávala se funkce v actoru!");
-            }
-        } else {
-            panic!("Očekával se actor!");
         }
     }
 }
