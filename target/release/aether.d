@@ -1,0 +1,1 @@
+/data/data/com.termux/files/home/aether-lang/target/release/aether: /data/data/com.termux/files/home/aether-lang/src/ast.rs /data/data/com.termux/files/home/aether-lang/src/lexer.rs /data/data/com.termux/files/home/aether-lang/src/main.rs /data/data/com.termux/files/home/aether-lang/src/parser.rs
