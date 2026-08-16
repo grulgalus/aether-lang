@@ -1,0 +1,7 @@
+actor Worker {
+    fn initialize() {
+        let version = 1.0
+        let status = "Aether is alive and running!"
+        return status
+    }
+}
