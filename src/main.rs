@@ -1,9 +1,11 @@
 mod lexer;
 mod ast;
 mod parser;
+mod evaluator;
 
 use lexer::Lexer;
 use parser::Parser;
+use evaluator::{Environment, eval_program};
 use std::env;
 use std::fs;
 
@@ -27,18 +29,23 @@ fn main() {
         }
     };
 
-    println!("✨ Kód úspěšně načten. Zahajuji lexikální a syntaktickou analýzu...\n");
+    println!("✨ Kód načten. Lexikální a syntaktická analýza...\n");
     
     let lexer = Lexer::new(&source_code);
     let mut parser = Parser::new(lexer);
     let ast = parser.parse_program();
     
-    println!("--- Abstraktní syntaktický strom (AST) ---");
-    
-    // OPRAVA: Přidán znak & (reference), abychom vektor AST nezkonzumovali!
-    for stmt in &ast.statements {
-        println!("{:#?}", stmt);
+    // Nyní přidáme spuštění kódu (Evaluator)!
+    println!("🚀 Spouštím virtuální stroj Aetheru...\n");
+    let mut env = Environment::new();
+    let result = eval_program(&ast, &mut env);
+
+    println!("--- VÝSLEDEK BĚHU PROGRAMU ---");
+    match result {
+        evaluator::Object::Number(n) => println!("Vrácená hodnota: {}", n),
+        evaluator::Object::StringObj(s) => println!("Vrácená hodnota: \"{}\"", s),
+        evaluator::Object::Null => println!("Program proběhl, ale nevrátil nic (Null)."),
     }
     
-    println!("\n✅ Analýza dokončena. Nalezeno {} hlavních uzlů.", ast.statements.len());
+    println!("\n✅ Hotovo.");
 }
