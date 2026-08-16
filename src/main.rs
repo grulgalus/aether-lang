@@ -15,7 +15,7 @@ fn main() {
     let filename = if args.len() > 1 {
         &args[1]
     } else {
-        "test.ae"
+        "tests/test.ae"
     };
 
     println!("🌌 Aether Compiler v0.1.0");

@@ -19,13 +19,20 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       
-    - name: Run tests
+    - name: Run Unit Tests (Rust)
       run: cargo test --verbose
+
+    - name: Build Aether compiler
+      run: cargo build --release
+
+    - name: Run End-to-End Test (Execute Aether script)
+      # Zde GitHub Action reálně spustí tvůj jazyk a otestuje, zda dokáže zpracovat test.ae!
+      run: ./target/release/aether tests/test.ae
 
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
-    - name: Build .deb package
+    - name: Build .deb package for Linux release
       run: cargo deb
 
     - name: Upload .deb Artifact
