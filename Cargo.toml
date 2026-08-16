@@ -1,0 +1,7 @@
+[package]
+name = "aether"
+version = "0.1.0"
+edition = "2021"
+description = "A modern, fast, and memory-safe programming language"
+
+[dependencies]
