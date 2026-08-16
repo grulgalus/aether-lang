@@ -4,10 +4,15 @@ use lexer::Lexer;
 fn main() {
     println!("Aether Compiler v0.1.0");
     
+    // Upravený kód, abychom otestovali i čísla a operátory!
     let source_code = r#"
         actor Worker {
-            fn start() {
-                let x = "Hello"
+            fn process(data: String) -> Result {
+                let id = 42
+                let ratio = 3.14
+                if id != 0 {
+                    return Ok("Done")
+                }
             }
         }
     "#;
