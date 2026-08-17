@@ -12,11 +12,8 @@ impl Lexer {
         let mut ch = self.input[self.position];
         let mut next_ch = if self.position + 1 < self.input.len() { self.input[self.position + 1] } else { '\0' };
 
-        // Magie pro preskakovani komentaru!
         while ch == '/' && next_ch == '/' {
-            while self.position < self.input.len() && self.input[self.position] != '\n' {
-                self.position += 1;
-            }
+            while self.position < self.input.len() && self.input[self.position] != '\n' { self.position += 1; }
             self.skip_whitespace();
             if self.position >= self.input.len() { return Token::EOF; }
             ch = self.input[self.position];
@@ -43,7 +40,7 @@ impl Lexer {
         while self.position < self.input.len() && (self.input[self.position].is_alphanumeric() || self.input[self.position] == '_') { self.position += 1; }
         let text: String = self.input[start..self.position].iter().collect();
         match text.as_str() {
-            "actor" | "fn" | "let" | "return" | "print" | "if" | "else" | "while" | "true" | "false" => Token::Keyword(text),
+            "actor" | "fn" | "let" | "return" | "print" | "if" | "else" | "while" | "true" | "false" | "import" => Token::Keyword(text),
             _ => Token::Identifier(text),
         }
     }

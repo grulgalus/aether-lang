@@ -1,0 +1,14 @@
+// Naimportujeme jiný soubor
+import "tests/moje_knihovna.ae"
+
+actor Aplikace {
+    fn run() {
+        print("Spoustim hlavni program...")
+        
+        // Použijeme proměnné z jiné složky!
+        print("Tohle heslo jsme stahli z jineho souboru:")
+        print(TAJNE_HESLO)
+        
+        return verze
+    }
+}

@@ -36,30 +36,28 @@ impl Parser {
             Token::Keyword(kw) if kw == "actor" => self.parse_actor(),
             Token::Keyword(kw) if kw == "if" => self.parse_if(),
             Token::Keyword(kw) if kw == "while" => self.parse_while(),
+            Token::Keyword(kw) if kw == "import" => {
+                self.next_token();
+                let file = match &self.current_token { Token::StringLiteral(s) => s.clone(), _ => return None };
+                self.next_token();
+                Some(Stmt::Import(file))
+            }
             Token::Identifier(name) => {
                 if let Token::Operator(op) = &self.peek_token {
                     if op == "=" {
-                        let n = name.clone();
-                        self.next_token(); self.next_token(); 
-                        let value = self.parse_expression()?;
-                        self.next_token();
+                        let n = name.clone(); self.next_token(); self.next_token(); 
+                        let value = self.parse_expression()?; self.next_token();
                         return Some(Stmt::Assign { name: n, value });
                     }
                 }
-                let expr = self.parse_expression()?;
-                self.next_token();
+                let expr = self.parse_expression()?; self.next_token();
                 Some(Stmt::Expression(expr))
             }
             _ => None,
         }
     }
 
-    fn parse_if(&mut self) -> Option<Stmt> {
-        self.next_token(); let condition = self.parse_expression()?; let consequence = self.parse_block();
-        let mut alternative = None;
-        if let Token::Keyword(kw) = &self.current_token { if kw == "else" { alternative = Some(self.parse_block()); } }
-        Some(Stmt::If { condition, consequence, alternative })
-    }
+    fn parse_if(&mut self) -> Option<Stmt> { self.next_token(); let condition = self.parse_expression()?; let consequence = self.parse_block(); let mut alternative = None; if let Token::Keyword(kw) = &self.current_token { if kw == "else" { alternative = Some(self.parse_block()); } } Some(Stmt::If { condition, consequence, alternative }) }
     fn parse_while(&mut self) -> Option<Stmt> { self.next_token(); let cond = self.parse_expression()?; let body = self.parse_block(); Some(Stmt::While { condition: cond, body }) }
     fn parse_let(&mut self) -> Option<Stmt> { self.next_token(); let name = match &self.current_token { Token::Identifier(id) => id.clone(), _ => return None }; self.next_token(); self.next_token(); let value = self.parse_expression()?; self.next_token(); Some(Stmt::Let { name, value }) }
     fn parse_actor(&mut self) -> Option<Stmt> { self.next_token(); let name = match &self.current_token { Token::Identifier(id) => id.clone(), _ => return None }; let methods = self.parse_block(); Some(Stmt::Actor { name, methods }) }
@@ -69,60 +67,14 @@ impl Parser {
 
     fn parse_expression(&mut self) -> Option<Expr> {
         let mut left = match &self.current_token {
-            Token::Number(num) => Expr::Number(num.clone()),
-            Token::StringLiteral(s) => Expr::StringLit(s.clone()),
-            Token::Keyword(kw) if kw == "true" => Expr::Boolean(true),
-            Token::Keyword(kw) if kw == "false" => Expr::Boolean(false),
-            Token::Symbol('[') => {
-                self.next_token();
-                let mut elements = Vec::new();
-                if self.current_token != Token::Symbol(']') {
-                    loop {
-                        if let Some(el) = self.parse_expression() { elements.push(el); }
-                        self.next_token();
-                        if self.current_token == Token::Symbol(',') { self.next_token(); } else { break; }
-                    }
-                }
-                Expr::Array(elements)
-            },
-            Token::Identifier(id) => {
-                let name = id.clone();
-                if self.peek_token == Token::Symbol('(') {
-                    self.next_token(); self.next_token();
-                    let mut args = Vec::new();
-                    if self.current_token != Token::Symbol(')') {
-                        loop {
-                            if let Some(arg) = self.parse_expression() { args.push(arg); }
-                            self.next_token();
-                            if self.current_token == Token::Symbol(',') { self.next_token(); } else { break; }
-                        }
-                    }
-                    Expr::Call { function: name, args }
-                } else {
-                    Expr::Identifier(name)
-                }
-            },
+            Token::Number(num) => Expr::Number(num.clone()), Token::StringLiteral(s) => Expr::StringLit(s.clone()), Token::Keyword(kw) if kw == "true" => Expr::Boolean(true), Token::Keyword(kw) if kw == "false" => Expr::Boolean(false),
+            Token::Symbol('[') => { self.next_token(); let mut elements = Vec::new(); if self.current_token != Token::Symbol(']') { loop { if let Some(el) = self.parse_expression() { elements.push(el); } self.next_token(); if self.current_token == Token::Symbol(',') { self.next_token(); } else { break; } } } Expr::Array(elements) },
+            Token::Identifier(id) => { let name = id.clone(); if self.peek_token == Token::Symbol('(') { self.next_token(); self.next_token(); let mut args = Vec::new(); if self.current_token != Token::Symbol(')') { loop { if let Some(arg) = self.parse_expression() { args.push(arg); } self.next_token(); if self.current_token == Token::Symbol(',') { self.next_token(); } else { break; } } } Expr::Call { function: name, args } } else { Expr::Identifier(name) } },
             _ => return None,
         };
-
-        // Magická smyčka pro "dívání se dopředu" (odchytí matematiku i indexování pole přes [ ])
         loop {
-            if let Token::Operator(op) = &self.peek_token {
-                if ["+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">="].contains(&op.as_str()) {
-                    let operator = op.clone();
-                    self.next_token(); self.next_token();
-                    let right = self.parse_expression()?;
-                    left = Expr::BinaryOp { left: Box::new(left), operator, right: Box::new(right) };
-                    continue;
-                }
-            }
-            if self.peek_token == Token::Symbol('[') {
-                self.next_token(); self.next_token();
-                let index = self.parse_expression()?;
-                self.next_token(); // skok na konečnou ']'
-                left = Expr::Index { left: Box::new(left), index: Box::new(index) };
-                continue;
-            }
+            if let Token::Operator(op) = &self.peek_token { if ["+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">="].contains(&op.as_str()) { let operator = op.clone(); self.next_token(); self.next_token(); let right = self.parse_expression()?; left = Expr::BinaryOp { left: Box::new(left), operator, right: Box::new(right) }; continue; } }
+            if self.peek_token == Token::Symbol('[') { self.next_token(); self.next_token(); let index = self.parse_expression()?; self.next_token(); left = Expr::Index { left: Box::new(left), index: Box::new(index) }; continue; }
             break;
         }
         Some(left)

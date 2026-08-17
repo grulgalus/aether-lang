@@ -1,0 +1,5 @@
+// Tohle je modul s kodem!
+let TAJNE_HESLO = "Aether je nejlepsi!"
+let verze = 1.0
+
+print(" [ Modul moje_knihovna nacten ] ")
