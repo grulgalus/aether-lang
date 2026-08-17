@@ -23,7 +23,6 @@ impl Environment {
     pub fn get(&self, name: &str) -> Option<Object> { self.store.get(name).cloned() }
 }
 
-// Prefix podtržítkem '_' říká Rustu: "Vím, že tuhle proměnnou zatím nepoužívám, nestěžuj si."
 #[allow(dead_code)]
 fn check_program(_program: &Program) -> Result<(), String> { Ok(()) }
 
@@ -57,7 +56,17 @@ fn eval_block(stmts: &[Stmt], env: &mut Environment) -> Object {
 fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
     match stmt {
         Stmt::Let { name, value } | Stmt::Assign { name, value } => { let val = eval_expression(value, env); if let Object::Error(_) = val { return val; } env.set(name.clone(), val); Object::Null }
-        Stmt::Print { value } => { let val = eval_expression(value, env); if let Object::Error(_) = val { return val; } let text = val.to_string_val(); env.output.push(text); println!("{}", text); Object::Null }
+        
+        // OPRAVA PAMĚTI (Přidáno .clone())
+        Stmt::Print { value } => { 
+            let val = eval_expression(value, env); 
+            if let Object::Error(_) = val { return val; } 
+            let text = val.to_string_val(); 
+            env.output.push(text.clone()); 
+            println!("{}", text); 
+            Object::Null 
+        }
+        
         Stmt::If { condition, consequence, alternative } => { 
             let cond = eval_expression(condition, env); if let Object::Error(_) = cond { return cond; }
             let is_truthy = match cond { Object::Boolean(b) => b, Object::Number(n) => n != 0.0, Object::Null => false, _ => true }; 
@@ -76,7 +85,9 @@ fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
         Stmt::For { variable, iterable, body } => { let iter_val = eval_expression(iterable, env); if let Object::Array(arr) = iter_val { for item in arr { env.set(variable.clone(), item); let res = eval_block(body, env); if let Object::Error(_) = res { return res; } } Object::Null } else { Object::Error("For vyžaduje pole".into()) } }
         Stmt::Expression(expr) => eval_expression(expr, env),
         Stmt::Return { value } => eval_expression(value, env),
-        _ => Object::Null
+        
+        // Smazali jsme _ => Object::Null, protože jsme pokryli všechny možné varianty Stmt!
+        Stmt::Function { .. } | Stmt::Actor { .. } | Stmt::Import(_) => Object::Null,
     }
 }
 
@@ -124,6 +135,5 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
                 if operator == "+" { Object::StringObj(format!("{}{}", s1, s2)) } else if operator == "==" { Object::Boolean(s1 == s2) } else if operator == "!=" { Object::Boolean(s1 != s2) } else { Object::Error("Na text nelze použít tento operátor".into()) }
             } else { Object::Error("Matematika vyžaduje čísla nebo spojování textu".into()) }
         }
-        _ => Object::Null
     }
 }
