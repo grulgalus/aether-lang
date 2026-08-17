@@ -2,13 +2,11 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
 
-// Natáhneme si přímo tvůj kompilátor!
 #[path = "../../src/lexer.rs"] mod lexer;
 #[path = "../../src/ast.rs"] mod ast;
 #[path = "../../src/parser.rs"] mod parser;
 #[path = "../../src/evaluator.rs"] mod evaluator;
 
-// Tahle funkce bude viditelná pro Javu!
 #[no_mangle]
 pub extern "system" fn Java_com_aether_studio_AetherCore_runCode<'local>(
     mut env: JNIEnv<'local>,
@@ -20,7 +18,9 @@ pub extern "system" fn Java_com_aether_studio_AetherCore_runCode<'local>(
     let lex = lexer::Lexer::new(&input_str);
     let mut par = parser::Parser::new(lex);
     let prog = par.parse_program();
-    let mut aether_env = evaluator::Environment::new(false);
+    
+    // OPRAVA PRO ANDROID (Závorky jsou prázdné!)
+    let mut aether_env = evaluator::Environment::new();
     
     evaluator::eval_program(&prog, &mut aether_env);
     
