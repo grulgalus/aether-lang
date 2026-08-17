@@ -42,8 +42,7 @@ impl Parser {
     }
 
     fn parse_print_statement(&mut self) -> Option<Stmt> {
-        self.next_token(); // přeskočí 'print'
-        
+        self.next_token();
         let has_parens = self.current_token == Token::Symbol('(');
         if has_parens { self.next_token(); }
 
@@ -59,10 +58,7 @@ impl Parser {
 
     fn parse_actor_statement(&mut self) -> Option<Stmt> {
         self.next_token();
-        let name = match &self.current_token {
-            Token::Identifier(ident) => ident.clone(),
-            _ => return None,
-        };
+        let name = match &self.current_token { Token::Identifier(ident) => ident.clone(), _ => return None, };
         self.next_token();
         if self.current_token != Token::Symbol('{') { return None; }
         self.next_token();
@@ -111,11 +107,36 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Option<Expr> {
-        match &self.current_token {
-            Token::Number(num) => Some(Expr::Number(num.clone())),
-            Token::StringLiteral(s) => Some(Expr::StringLit(s.clone())),
-            Token::Identifier(id) => Some(Expr::Identifier(id.clone())),
-            _ => None,
+        // Nejprve získáme levou stranu (číslo, proměnnou, text)
+        let left = match &self.current_token {
+            Token::Number(num) => Expr::Number(num.clone()),
+            Token::StringLiteral(s) => Expr::StringLit(s.clone()),
+            Token::Identifier(id) => Expr::Identifier(id.clone()),
+            _ => return None,
+        };
+
+        // Podíváme se, jestli za ním nenásleduje matematický operátor
+        if let Token::Operator(op) = &self.peek_token {
+            if "+-*/".contains(op) {
+                let operator = op.clone();
+                self.next_token(); // přesuneme se z levé strany na operátor
+                self.next_token(); // přesuneme se z operátoru na pravou stranu
+                
+                let right = match &self.current_token {
+                    Token::Number(num) => Expr::Number(num.clone()),
+                    Token::StringLiteral(s) => Expr::StringLit(s.clone()),
+                    Token::Identifier(id) => Expr::Identifier(id.clone()),
+                    _ => return None,
+                };
+                
+                return Some(Expr::BinaryOp {
+                    left: Box::new(left),
+                    operator,
+                    right: Box::new(right),
+                });
+            }
         }
+
+        Some(left)
     }
 }

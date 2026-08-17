@@ -3,6 +3,7 @@ pub enum Expr {
     Identifier(String),
     Number(String),
     StringLit(String),
+    BinaryOp { left: Box<Expr>, operator: String, right: Box<Expr> },
 }
 
 #[derive(Debug, PartialEq)]

@@ -1,9 +1,16 @@
 actor Worker {
     fn initialize() {
-        let version = 1.0
-        print("Hello World from Aether!")
-        print("Běžím na verzi:")
-        print(version)
-        return version
+        let text = "Aether " + "kalkulačka:"
+        print(text)
+
+        let x = 10 * 5
+        print("10 * 5 = ")
+        print(x)
+        
+        let y = 100 - 45
+        print("100 - 45 = ")
+        print(y)
+        
+        return x
     }
 }

@@ -62,5 +62,32 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
         Expr::Number(s) => Object::Number(s.parse().unwrap_or(0.0)),
         Expr::StringLit(s) => Object::StringObj(s.clone()),
         Expr::Identifier(s) => env.get(s).unwrap_or(Object::Null),
+        
+        // Zde řešíme výpočty!
+        Expr::BinaryOp { left, operator, right } => {
+            let left_val = eval_expression(left, env);
+            let right_val = eval_expression(right, env);
+            
+            // Pokud jsou obě strany čísla:
+            if let (Object::Number(l), Object::Number(r)) = (&left_val, &right_val) {
+                match operator.as_str() {
+                    "+" => Object::Number(l + r),
+                    "-" => Object::Number(l - r),
+                    "*" => Object::Number(l * r),
+                    "/" => if *r != 0.0 { Object::Number(l / r) } else { Object::Null },
+                    _ => Object::Null,
+                }
+            } 
+            // Pokud jsou obě strany text (např. "Ahoj " + "světe"):
+            else if let (Object::StringObj(l), Object::StringObj(r)) = (&left_val, &right_val) {
+                if operator == "+" {
+                    Object::StringObj(format!("{}{}", l, r))
+                } else {
+                    Object::Null
+                }
+            } else {
+                Object::Null
+            }
+        }
     }
 }
