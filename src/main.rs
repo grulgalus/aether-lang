@@ -38,8 +38,7 @@ impl Config {
 fn serve_studio() {
     let listener = TcpListener::bind("127.0.0.1:8765").expect("Port 8765 je zabrany!");
     println!("==================================================");
-    println!("🎨 AETHER STUDIO JE ZAPNUTÉ!");
-    println!("Otevři si tento odkaz ve svém prohlížeči (např. Chrome):");
+    println!("🎨 AETHER STUDIO BĚŽÍ!");
     println!("👉 http://127.0.0.1:8765 👈");
     println!("(Kompilátor zastavíš zkratkou CTRL+C)");
     println!("==================================================");
@@ -50,31 +49,55 @@ fn serve_studio() {
             if let Ok(bytes_read) = stream.read(&mut buffer) {
                 let request = String::from_utf8_lossy(&buffer[..bytes_read]);
                 
-                // Servírujeme HTML okno Aether Studia
-                if request.starts_with("GET / ") || request.starts_with("GET / HTTP") {
-                    let html = r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Aether Studio</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>
-                        body { margin: 0; background: #1e1e1e; color: #d4d4d4; font-family: monospace; display: flex; flex-direction: column; height: 100vh; }
-                        .header { background: #2d2d2d; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; }
-                        .header h1 { margin: 0; font-size: 20px; color: #007acc; }
-                        button { background: #0e639c; color: white; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s;}
-                        button:hover { background: #1177bb; transform: scale(1.05); }
+                // 1. Zpracování požadavku na IKONU!
+                if request.starts_with("GET /icon.png ") {
+                    // Zkusíme načíst tvoji ikonu ze složky
+                    if let Ok(img) = fs::read("aether_space_icon.png") {
+                        let header = format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\n\r\n", img.len());
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&img);
+                    } else {
+                        // Pokud ikonu ještě nemáš staženou, nic to nerozbije
+                        let _ = stream.write_all(b"HTTP/1.1 404 NOT FOUND\r\n\r\n");
+                    }
+                }
+                // 2. Servírujeme HTML okno Aether Studia (přidáno logo!)
+                else if request.starts_with("GET / ") || request.starts_with("GET / HTTP") {
+                    let html = r#"<!DOCTYPE html><html><head><meta charset="utf-8">
+                        <title>Aether Studio</title>
+                        <link rel="icon" type="image/png" href="/icon.png">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0"><style>
+                        body { margin: 0; background: #121212; color: #d4d4d4; font-family: monospace; display: flex; flex-direction: column; height: 100vh; }
+                        .header { background: #1e1e1e; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; }
+                        .header-left { display: flex; align-items: center; gap: 15px; }
+                        .logo { width: 40px; height: 40px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 255, 255, 0.2); }
+                        .header h1 { margin: 0; font-size: 22px; color: #4af626; text-shadow: 0 0 5px rgba(74, 246, 38, 0.4); }
+                        button { background: #00bcd4; color: #121212; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s;}
+                        button:hover { background: #0097a7; transform: scale(1.05); }
                         .container { display: flex; flex: 1; flex-direction: column; }
                         @media(min-width: 768px) { .container { flex-direction: row; } }
                         textarea { flex: 1; background: #1e1e1e; color: #9cdcfe; border: none; padding: 15px; font-family: monospace; font-size: 16px; outline: none; resize: none; border-right: 1px solid #333; }
-                        pre { flex: 1; padding: 15px; margin: 0; overflow-y: auto; color: #4af626; background: #0d0d0d; font-size: 15px; }
+                        pre { flex: 1; padding: 15px; margin: 0; overflow-y: auto; color: #4af626; background: #0d0d0d; font-size: 15px; border-top: 1px solid #333; }
                     </style></head><body>
-                        <div class="header"><h1>🌌 Aether Studio (v0.1.0)</h1><button onclick="run()">▶ SPUSTIT KÓD</button></div>
+                        <div class="header">
+                            <div class="header-left">
+                                <img src="/icon.png" alt="Aether Logo" class="logo" onerror="this.style.display='none'">
+                                <h1>Aether Studio</h1>
+                            </div>
+                            <button onclick="run()">▶ SPUSTIT KÓD</button>
+                        </div>
                         <div class="container">
-                            <textarea id="code" spellcheck="false">// Vítej v Aether Studiu!
-// Tady můžeš psát a testovat kód rovnou z prohlížeče.
+                            <textarea id="code" spellcheck="false">// Vitej v Aether Studiu!
+// Kompilator verze 0.1.0
 
-print("Ahoj svete z prohlizece!")
-let pole = ["Aether", "Studio", "funguje!"]
-print(pole)
+print("Ahoj svete!")
+let stesti = rand()
 
-let kostka = rand()
-print("Padlo cislo:")
-print(kostka)
+if stesti > 50 {
+    print("Dnesni den bude plny kodu!")
+} else {
+    print("Dneska radsi bez ven!")
+}
 </textarea>
                             <pre id="output">Čekám na spuštění programu...</pre>
                         </div>
@@ -91,7 +114,6 @@ print(kostka)
                     let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}", html);
                     let _ = stream.write_all(response.as_bytes());
                 } 
-                // A tady přijímáme kód, který člověk napsal v prohlížeči, a rovnou ho vykonáme!
                 else if request.starts_with("POST /run ") {
                     if let Some(idx) = request.find("\r\n\r\n") {
                         let code = request[idx+4..].trim_matches(char::from(0));
@@ -118,11 +140,7 @@ print(kostka)
 fn main() {
     let args: Vec<String> = env::args().collect();
     
-    // ZACHYCENÍ STARTU STUDIA
-    if args.contains(&"--studio".to_string()) {
-        serve_studio();
-        std::process::exit(0);
-    }
+    if args.contains(&"--studio".to_string()) { serve_studio(); std::process::exit(0); }
 
     let config = Config::load();
     if args.contains(&"--edit-config".to_string()) { let _ = Command::new(&config.editor).arg(&format!("{}/.aether_config", env::var("HOME").unwrap_or_else(|_| ".".to_string()))).status(); std::process::exit(0); }
@@ -154,7 +172,5 @@ fn main() {
     let mut env = evaluator::Environment::new(ukecany_rezim && !insane_mode);
     let result = evaluator::eval_program(&program, &mut env);
 
-    if ukecany_rezim && !insane_mode {
-        println!("⏱️ Celkový čas běhu: {:?}", exec_start.elapsed());
-    }
+    if ukecany_rezim && !insane_mode { println!("⏱️ Celkový čas běhu: {:?}", exec_start.elapsed()); }
 }
