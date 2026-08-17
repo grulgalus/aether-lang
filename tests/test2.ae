@@ -1,0 +1,9 @@
+actor Automator {
+    fn check_strings() {
+        let cast1 = "Auto"
+        let cast2 = "matizace "
+        let cast3 = "funguje!"
+        print(cast1 + cast2 + cast3)
+        return 1
+    }
+}

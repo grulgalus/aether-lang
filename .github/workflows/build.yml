@@ -16,13 +16,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    # Přidáme Rust toolchain i pro Android!
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-linux-android
         
-    # --- BUILD PRO BĚŽNÝ LINUX A PC ---
     - name: Install ARM64 Cross-Compilation Tools
       run: |
         sudo apt-get update
@@ -39,6 +37,19 @@ jobs:
         cargo build --release --target x86_64-unknown-linux-gnu
         cargo build --release --target aarch64-unknown-linux-gnu
 
+    # --- ZDE JE TVÉ AUTOMATICKÉ TESTOVÁNÍ! ---
+    - name: Run Automated Aether Tests (E2E)
+      run: |
+        echo "🚀 Spouštím automatické testy pro všechny .ae soubory ve složce tests/..."
+        for script in tests/*.ae; do
+          echo "----------------------------------------"
+          echo "📜 Testuji: $script"
+          # Použijeme PC verzi kompilátoru, protože běžíme na GitHub serveru
+          ./target/x86_64-unknown-linux-gnu/release/aether "$script"
+        done
+        echo "----------------------------------------"
+        echo "✅ Všechny testy úspěšně proběhly!"
+
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
@@ -47,19 +58,16 @@ jobs:
         cargo deb --target x86_64-unknown-linux-gnu --no-build
         cargo deb --target aarch64-unknown-linux-gnu --no-build
 
-    # --- BUILD NATIVNĚ PRO TERMUX (ANDROID) ---
     - name: Install cargo-ndk (Android builder)
       run: cargo install cargo-ndk
 
     - name: Build Termux Native (Android aarch64)
-      # Zkompiluje čistou binárku s Android knihovnami (Bionic libc)!
       run: cargo ndk -t arm64-v8a build --release
 
     - name: Build 100% Native Termux .deb
       run: |
         mkdir -p termux_pkg/data/data/com.termux/files/usr/bin
         mkdir -p termux_pkg/DEBIAN
-        # Vezmeme binárku z Android složky!
         cp target/aarch64-linux-android/release/aether termux_pkg/data/data/com.termux/files/usr/bin/
         chmod 755 termux_pkg/data/data/com.termux/files/usr/bin/aether
         cat << 'CTRL' > termux_pkg/DEBIAN/control
