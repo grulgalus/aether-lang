@@ -21,13 +21,9 @@ jobs:
       with:
         targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-linux-android
         
-    - name: Install ARM64 Cross-Compilation Tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
-        
     - name: Configure Cargo for Linux ARM cross-compilation
       run: |
+        sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
         mkdir -p .cargo
         echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
         echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
@@ -37,28 +33,34 @@ jobs:
         cargo build --release --target x86_64-unknown-linux-gnu
         cargo build --release --target aarch64-unknown-linux-gnu
 
-    # --- ZDE JE TVÉ AUTOMATICKÉ TESTOVÁNÍ! ---
-    - name: Run Automated Aether Tests (E2E)
-      run: |
-        echo "🚀 Spouštím automatické testy pro všechny .ae soubory ve složce tests/..."
-        for script in tests/*.ae; do
-          echo "----------------------------------------"
-          echo "📜 Testuji: $script"
-          # Použijeme PC verzi kompilátoru, protože běžíme na GitHub serveru
-          ./target/x86_64-unknown-linux-gnu/release/aether "$script"
-        done
-        echo "----------------------------------------"
-        echo "✅ Všechny testy úspěšně proběhly!"
-
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
-    - name: Build Standard .deb packages
-      run: |
-        cargo deb --target x86_64-unknown-linux-gnu --no-build
-        cargo deb --target aarch64-unknown-linux-gnu --no-build
+    # KROK 1: Vytvoříme ten .deb balíček
+    - name: Build Standard PC .deb package
+      run: cargo deb --target x86_64-unknown-linux-gnu --no-build
 
-    - name: Install cargo-ndk (Android builder)
+    # KROK 2: Fyzicky ho nainstalujeme do Ubuntu!
+    - name: INSTALL .DEB SYSTEM WIDE
+      run: |
+        echo "📦 Instaluji systémový balíček Aether z .deb!"
+        sudo dpkg -i target/x86_64-unknown-linux-gnu/debian/*.deb
+
+    # KROK 3: Zavoláme E2E test přímo pomocí systémového příkazu 'aether'
+    - name: Run Automated Aether Tests (from .deb install!)
+      run: |
+        echo "🚀 Spouštím automatické testy z nainstalovaného balíčku!"
+        for script in tests/*.ae; do
+          echo "----------------------------------------"
+          echo "📜 Testuji: $script"
+          aether "$script"
+        done
+        echo "✅ Všechny testy úspěšně proběhly na zkompilovaném balíčku!"
+
+    - name: Build ARM .deb (Raspberry Pi atd.)
+      run: cargo deb --target aarch64-unknown-linux-gnu --no-build
+
+    - name: Install cargo-ndk
       run: cargo install cargo-ndk
 
     - name: Build Termux Native (Android aarch64)
@@ -85,4 +87,6 @@ jobs:
         name: aether-debian-packages
         path: |
           target/debian/*.deb
+          target/x86_64-unknown-linux-gnu/debian/*.deb
+          target/aarch64-unknown-linux-gnu/debian/*.deb
           target/aether-termux_0.1.0-1_aarch64.deb

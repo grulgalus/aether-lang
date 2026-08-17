@@ -1,0 +1,26 @@
+actor AI {
+    fn think() {
+        print("--- AETHER TURING TEST ---")
+        
+        let x = 0
+        while x < 3 {
+            print("Cyklim... x je:")
+            print(x)
+            x = x + 1
+        }
+        
+        print("Cyklus dokoncen!")
+        
+        if x == 3 {
+            print("Podminka funguje: x je presne 3!")
+        } else {
+            print("Chyba v matrixu!")
+        }
+
+        let is_awesome = true
+        print("Je Aether uzasny?")
+        print(is_awesome)
+        
+        return x
+    }
+}
