@@ -1,7 +1,8 @@
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Identifier(String), Number(String), StringLit(String), Boolean(bool),
-    Array(Vec<Expr>), Index { left: Box<Expr>, index: Box<Expr> },
+    Array(Vec<Expr>), Dict(Vec<(String, Box<Expr>)>),
+    Index { left: Box<Expr>, index: Box<Expr> },
     BinaryOp { left: Box<Expr>, operator: String, right: Box<Expr> },
     Call { function: String, args: Vec<Expr> },
 }
@@ -11,6 +12,7 @@ pub enum Stmt {
     Expression(Expr), Return { value: Expr }, Print { value: Expr },
     If { condition: Expr, consequence: Vec<Stmt>, alternative: Option<Vec<Stmt>> },
     While { condition: Expr, body: Vec<Stmt> },
+    For { variable: String, iterable: Expr, body: Vec<Stmt> },
     Function { name: String, body: Vec<Stmt> }, Actor { name: String, methods: Vec<Stmt> },
     Import(String),
 }

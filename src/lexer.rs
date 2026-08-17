@@ -25,9 +25,7 @@ impl Lexer {
         if ch == '"' { return self.read_string(); }
         
         match (ch, next_ch) {
-            ('=', '=') | ('!', '=') | ('<', '=') | ('>', '=') | ('-', '>') => {
-                self.position += 2; return Token::Operator(format!("{}{}", ch, next_ch));
-            }
+            ('=', '=') | ('!', '=') | ('<', '=') | ('>', '=') | ('-', '>') => { self.position += 2; return Token::Operator(format!("{}{}", ch, next_ch)); }
             _ => {}
         }
         self.position += 1;
@@ -40,7 +38,7 @@ impl Lexer {
         while self.position < self.input.len() && (self.input[self.position].is_alphanumeric() || self.input[self.position] == '_') { self.position += 1; }
         let text: String = self.input[start..self.position].iter().collect();
         match text.as_str() {
-            "actor" | "fn" | "let" | "return" | "print" | "if" | "else" | "while" | "true" | "false" | "import" => Token::Keyword(text),
+            "actor" | "fn" | "let" | "return" | "print" | "if" | "else" | "while" | "for" | "in" | "true" | "false" | "import" => Token::Keyword(text),
             _ => Token::Identifier(text),
         }
     }

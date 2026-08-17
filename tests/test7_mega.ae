@@ -1,0 +1,29 @@
+print("--- AETHER MEGA UPDATE TEST ---")
+
+// 1. Otestujeme CLI Argumenty
+print("Parametry z terminalu:")
+print(SYS_ARGS)
+
+// 2. Otestujeme slovnik
+let uzivatel = { 
+    jmeno: "Architekt", 
+    level: 99, 
+    status: "Online" 
+}
+
+print("Jmeno ze slovniku:")
+print(uzivatel["jmeno"])
+
+// 3. Otestujeme novy FOR cyklus a keys() !
+print("Klice ve slovniku:")
+let klice = keys(uzivatel)
+for klic in klice {
+    print(klic)
+}
+
+// 4. Nove systemove funkce!
+print("Typ pole:")
+print(type(klice))
+
+print("Aktualni unix cas:")
+print(time())
