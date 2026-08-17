@@ -1,0 +1,43 @@
+name: 🚀 Build Official Aether App (Native Java + Rust JNI)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - name: Instalace NDK
+        uses: android-actions/setup-android@v2
+      - run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.2.9519653"
+      
+      - name: Instalace Rustu a Cargo-NDK
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi
+      - run: cargo install cargo-ndk
+
+      - name: 🦀 Kompilace Rust jádra do Android knihoven (.so)
+        working-directory: aether-jni
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
+        run: |
+          cargo ndk -t arm64-v8a -t armeabi-v7a -o ../android-app/app/src/main/jniLibs build --release
+
+      - name: ☕ Kompilace Oficiální Android Aplikace (Gradle)
+        working-directory: android-app
+        run: gradle assembleDebug
+
+      - name: 📦 Nahrát hotové APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: Aether-Studio-Official-APK
+          path: android-app/app/build/outputs/apk/debug/*.apk

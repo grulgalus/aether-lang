@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.aether.studio'
+    compileSdk 33
+    defaultConfig {
+        applicationId "com.aether.studio"
+        minSdk 24
+        targetSdk 33
+        versionCode 1
+        versionName "1.0"
+    }
+    sourceSets { main { jniLibs.srcDirs = ['src/main/jniLibs'] } }
+}
