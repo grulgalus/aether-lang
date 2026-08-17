@@ -8,15 +8,15 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
       
       - name: Instalace NDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3
       - run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.2.9519653"
       
       - name: Instalace Rustu a Cargo-NDK
@@ -37,7 +37,7 @@ jobs:
         run: gradle assembleDebug
 
       - name: 📦 Nahrát hotové APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Aether-Studio-Official-APK
           path: android-app/app/build/outputs/apk/debug/*.apk
