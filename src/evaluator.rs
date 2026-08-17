@@ -12,9 +12,7 @@ impl Environment {
     pub fn get(&self, name: &str) -> Option<Object> { self.store.get(name).cloned() }
 }
 
-pub fn eval_program(program: &Program, env: &mut Environment) -> Object {
-    eval_block(&program.statements, env)
-}
+pub fn eval_program(program: &Program, env: &mut Environment) -> Object { eval_block(&program.statements, env) }
 
 fn eval_block(statements: &[Stmt], env: &mut Environment) -> Object {
     let mut result = Object::Null;
@@ -28,17 +26,14 @@ fn eval_block(statements: &[Stmt], env: &mut Environment) -> Object {
 fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
     match stmt {
         Stmt::Let { name, value } | Stmt::Assign { name, value } => {
-            let val = eval_expression(value, env);
-            env.set(name.clone(), val);
-            Object::Null
+            let val = eval_expression(value, env); env.set(name.clone(), val); Object::Null
         }
+        Stmt::Expression(expr) => { eval_expression(expr, env); Object::Null }
         Stmt::Return { value } => eval_expression(value, env),
         Stmt::Print { value } => {
             match eval_expression(value, env) {
-                Object::Number(n) => println!("{}", n),
-                Object::StringObj(s) => println!("{}", s),
-                Object::Boolean(b) => println!("{}", b),
-                Object::Null => println!("null"),
+                Object::Number(n) => println!("{}", n), Object::StringObj(s) => println!("{}", s),
+                Object::Boolean(b) => println!("{}", b), Object::Null => println!("null"),
             }
             Object::Null
         }
@@ -65,32 +60,56 @@ fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
 fn eval_expression(expr: &Expr, env: &Environment) -> Object {
     match expr {
         Expr::Number(s) => Object::Number(s.parse().unwrap_or(0.0)),
-        Expr::StringLit(s) => Object::StringObj(s.clone()),
-        Expr::Boolean(b) => Object::Boolean(*b),
+        Expr::StringLit(s) => Object::StringObj(s.clone()), Expr::Boolean(b) => Object::Boolean(*b),
         Expr::Identifier(s) => {
-            // TADY JE TA MAGIE PRO VSTUP!
             if s == "input" {
-                let mut line = String::new();
-                std::io::stdin().read_line(&mut line).unwrap_or(0);
+                let mut line = String::new(); std::io::stdin().read_line(&mut line).unwrap_or(0);
                 return Object::StringObj(line.trim().to_string());
-            }
-            if s == "time" {
-                let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
-                return Object::Number(t);
             }
             env.get(s).unwrap_or(Object::Null)
         }
+        Expr::Call { function, args } => {
+            let mut eval_args = Vec::new();
+            for arg in args { eval_args.push(eval_expression(arg, env)); }
+            
+            match function.as_str() {
+                // Přímý přístup do BASH SHELLU!
+                "cmd" => {
+                    if let Some(Object::StringObj(command)) = eval_args.get(0) {
+                        if let Ok(output) = std::process::Command::new("sh").arg("-c").arg(command).output() {
+                            return Object::StringObj(String::from_utf8_lossy(&output.stdout).to_string());
+                        }
+                    }
+                    Object::Null
+                },
+                // Čtení OS souborů
+                "read" => {
+                    if let Some(Object::StringObj(path)) = eval_args.get(0) {
+                        if let Ok(content) = std::fs::read_to_string(path) { return Object::StringObj(content); }
+                    }
+                    Object::Null
+                },
+                // Zápis do OS souborů
+                "write" => {
+                    if let (Some(Object::StringObj(path)), Some(Object::StringObj(content))) = (eval_args.get(0), eval_args.get(1)) {
+                        let _ = std::fs::write(path, content);
+                    }
+                    Object::Null
+                },
+                // Zjištění délky textu
+                "len" => {
+                    if let Some(Object::StringObj(s)) = eval_args.get(0) { return Object::Number(s.len() as f64); }
+                    Object::Null
+                }
+                _ => Object::Null
+            }
+        }
         Expr::BinaryOp { left, operator, right } => {
-            let left_val = eval_expression(left, env);
-            let right_val = eval_expression(right, env);
+            let left_val = eval_expression(left, env); let right_val = eval_expression(right, env);
             if let (Object::Number(l), Object::Number(r)) = (&left_val, &right_val) {
                 match operator.as_str() {
-                    "+" => Object::Number(l + r), "-" => Object::Number(l - r),
-                    "*" => Object::Number(l * r), "/" => if *r != 0.0 { Object::Number(l / r) } else { Object::Null },
-                    "<" => Object::Boolean(l < r), ">" => Object::Boolean(l > r),
-                    "==" => Object::Boolean(l == r), "!=" => Object::Boolean(l != r),
-                    "<=" => Object::Boolean(l <= r), ">=" => Object::Boolean(l >= r),
-                    _ => Object::Null,
+                    "+" => Object::Number(l + r), "-" => Object::Number(l - r), "*" => Object::Number(l * r), "/" => if *r != 0.0 { Object::Number(l / r) } else { Object::Null },
+                    "<" => Object::Boolean(l < r), ">" => Object::Boolean(l > r), "==" => Object::Boolean(l == r), "!=" => Object::Boolean(l != r), "<=" => Object::Boolean(l <= r), ">=" => Object::Boolean(l >= r), _ => Object::Null,
                 }
             } else if let (Object::StringObj(l), Object::StringObj(r)) = (&left_val, &right_val) {
                 if operator == "+" { Object::StringObj(format!("{}{}", l, r)) } else { Object::Null }

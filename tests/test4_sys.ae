@@ -1,0 +1,25 @@
+actor SystemTest {
+    fn exploit() {
+        print("🤖 Aether ziskal systemovy pristup...")
+        
+        // Přečteme obsah domovské složky přes BASH zevnitř Aetheru!
+        let slozka = cmd("ls -la")
+        print("Obsah tve slozky z terminalu:")
+        print(slozka)
+        
+        // Vytvoříme fyzický soubor v mobilu
+        print("Zapisuji tajny soubor na disk...")
+        write("aether_tajemstvi.txt", "Tohle zapsala AI pres Aether OS!")
+        
+        // Přečteme ho zpět!
+        let obsah = read("aether_tajemstvi.txt")
+        print("Precteno ze souboru: " + obsah)
+        
+        // Využití funkce s více argumenty a kompozice
+        let delka = len(obsah)
+        print("Pocet znaku v tajemstvi:")
+        print(delka)
+        
+        return 0
+    }
+}
