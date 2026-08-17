@@ -20,9 +20,16 @@ fn main() {
     for arg in args.iter().skip(1) { if arg != "--stop-shut-up" && arg != "--be-insane" { filename = arg; break; } }
     if filename.is_empty() { eprintln!("Chyba: Musíš zadat cestu k .ae souboru!"); std::process::exit(1); }
 
+    // --- TVRĎÁCKÁ KONTROLA PŘÍPONY ---
+    if !filename.ends_with(".ae") {
+        let spatna_pripona = filename.split('.').last().unwrap_or("bez_pripony");
+        eprintln!("🛑 [KRITICKÁ CHYBA FORMÁTU] Co to na mě zkoušíš za formát? '.{}'?!", spatna_pripona);
+        eprintln!("Aether přijímá výhradně a pouze čistokrevné '.ae' skripty. Nejsme v cirkuse!");
+        std::process::exit(1);
+    }
+
     let contents = match fs::read_to_string(filename) { Ok(c) => c, Err(_) => { eprintln!("Chyba: Nelze přečíst soubor '{}'", filename); std::process::exit(1); } };
     
-    // Zapínáme stopky přímo v jádru!
     let exec_start = Instant::now();
         
     if insane_mode {
@@ -35,9 +42,7 @@ fn main() {
     } else if ukecany_rezim {
         let line_count = contents.lines().count();
         let file_size = contents.len();
-        let ext = filename.split('.').last().unwrap_or("neznámý");
         
-        // Získání systémových informací přes Rust!
         let os_info = env::consts::OS;
         let arch_info = env::consts::ARCH;
         
@@ -48,7 +53,8 @@ fn main() {
         println!("🖥️  Cílový systém:     {} ({})", os_info, arch_info);
         println!("📂 Zpracováván soubor: {}", filename);
         println!("📊 Statistiky kódu:   {} řádků | {} bytů", line_count, file_size);
-        println!("🏷️  Typ souboru:       .{}", ext);
+        // Tady už si kompilátor nemusí nic tipovat, protože ví, že to musí být .ae!
+        println!("🏷️  Typ souboru:       .ae (Ověřeno & Validní)");
         println!("==================================================");
         println!("✨ Fáze 1: Lexikální a syntaktická analýza...");
         println!("🚀 Fáze 2: Spouštím virtuální stroj Aetheru...\n");
@@ -75,7 +81,6 @@ fn main() {
             evaluator::Object::Array(arr) => println!("Vrácená hodnota: Pole (obsahuje {} polozek)", arr.len()),
             evaluator::Object::Null => println!("Program proběhl, ale nevrátil nic (Null)."),
         }
-        // Vytiskneme celkový čas běhu Aetheru!
         println!("⏱️  Celkový čas běhu: {:?}", exec_duration);
         println!("✅ Systém úspěšně ukončen.");
         println!("==================================================");
