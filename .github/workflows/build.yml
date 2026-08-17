@@ -38,11 +38,14 @@ jobs:
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
-    - name: Build .deb package for AMD64 / INTEL64
+    - name: Build .deb package for PC (AMD64)
       run: cargo deb --target x86_64-unknown-linux-gnu
 
-    - name: Build .deb package for ARM64
+    - name: Build .deb package for Standard Linux (ARM64)
       run: cargo deb --target aarch64-unknown-linux-gnu
+
+    - name: Build .deb package for Termux (Android)
+      run: cargo deb --target aarch64-unknown-linux-gnu --variant termux
 
     - name: Upload .deb Artifacts
       uses: actions/upload-artifact@v4

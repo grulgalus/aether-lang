@@ -13,3 +13,9 @@ maintainer = "Aether Developer"
 copyright = "2026, Aether Project"
 extended-description = "Aether Compiler: Lexer, Parser and core language tools."
 section = "devel"
+
+# Toto je speciální profil pouze pro Termux Android
+[package.metadata.deb.variants.termux]
+assets = [
+    ["target/aarch64-unknown-linux-gnu/release/aether", "/data/data/com.termux/files/usr/bin/aether", "755"]
+]
