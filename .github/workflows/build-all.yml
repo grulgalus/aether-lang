@@ -2,9 +2,8 @@ name: Build Aether (Windows & Linux)
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags:
+      - 'exe-deb*'
 
 jobs:
   build:
