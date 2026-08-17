@@ -16,23 +16,25 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    # Přidáme Rust toolchain i pro Android!
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-linux-android
+        
+    # --- BUILD PRO BĚŽNÝ LINUX A PC ---
     - name: Install ARM64 Cross-Compilation Tools
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc-aarch64-linux-gnu
         
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
-        
-    - name: Configure Cargo for ARM cross-compilation
+    - name: Configure Cargo for Linux ARM cross-compilation
       run: |
         mkdir -p .cargo
         echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
         echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
 
-    - name: Build binaries
+    - name: Build Standard Linux binaries
       run: |
         cargo build --release --target x86_64-unknown-linux-gnu
         cargo build --release --target aarch64-unknown-linux-gnu
@@ -40,23 +42,32 @@ jobs:
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
-    - name: Build Standard .deb packages (for PC and standard Linux)
+    - name: Build Standard .deb packages
       run: |
         cargo deb --target x86_64-unknown-linux-gnu --no-build
         cargo deb --target aarch64-unknown-linux-gnu --no-build
 
-    - name: Build 100% Native Termux .deb (Bypass cargo-deb completely!)
+    # --- BUILD NATIVNĚ PRO TERMUX (ANDROID) ---
+    - name: Install cargo-ndk (Android builder)
+      run: cargo install cargo-ndk
+
+    - name: Build Termux Native (Android aarch64)
+      # Zkompiluje čistou binárku s Android knihovnami (Bionic libc)!
+      run: cargo ndk -t arm64-v8a build --release
+
+    - name: Build 100% Native Termux .deb
       run: |
         mkdir -p termux_pkg/data/data/com.termux/files/usr/bin
         mkdir -p termux_pkg/DEBIAN
-        cp target/aarch64-unknown-linux-gnu/release/aether termux_pkg/data/data/com.termux/files/usr/bin/
+        # Vezmeme binárku z Android složky!
+        cp target/aarch64-linux-android/release/aether termux_pkg/data/data/com.termux/files/usr/bin/
         chmod 755 termux_pkg/data/data/com.termux/files/usr/bin/aether
         cat << 'CTRL' > termux_pkg/DEBIAN/control
         Package: aether
         Version: 0.1.0-termux
         Architecture: aarch64
         Maintainer: Aether Developer
-        Description: Aether Compiler (100% Pure Termux Edition)
+        Description: Aether Compiler (100% Native Android/Termux Edition)
         CTRL
         dpkg-deb --build termux_pkg target/aether-termux_0.1.0-1_aarch64.deb
 
