@@ -11,17 +11,17 @@ fn main() {
     
     // Pokud nezadáme ani soubor, vypíšeme nápovědu
     if args.len() < 2 {
-        eprintln!("Použití: aether <soubor.ae> [--shut-up]");
+        eprintln!("Použití: aether <soubor.ae> [--stop-shut-up]");
         std::process::exit(1);
     }
     
-    // Detekujeme tajný příkaz "zavři pusu"
-    let shut_up = args.contains(&"--shut-up".to_string());
+    // Detekujeme tvůj příkaz pro ukecanou verzi (Verbose mode)
+    let ukecany_rezim = args.contains(&"--stop-shut-up".to_string());
     
-    // Najdeme jméno souboru (ignorujeme argument --shut-up)
+    // Najdeme jméno souboru (ignorujeme argument --stop-shut-up)
     let mut filename = "";
     for arg in args.iter().skip(1) {
-        if arg != "--shut-up" {
+        if arg != "--stop-shut-up" {
             filename = arg;
             break;
         }
@@ -40,7 +40,8 @@ fn main() {
         }
     };
         
-    if !shut_up {
+    // Vypisuje jen když jsme to povolili!
+    if ukecany_rezim {
         println!("🌌 Aether Compiler v0.1.0");
         println!("📂 Načítám soubor: {}", filename);
         println!("✨ Kód načten. Lexikální a syntaktická analýza...");
@@ -50,15 +51,15 @@ fn main() {
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
     
-    if !shut_up {
+    if ukecany_rezim {
         println!("\n🚀 Spouštím virtuální stroj Aetheru...\n");
     }
     
     let mut env = evaluator::Environment::new();
     let result = evaluator::eval_program(&program, &mut env);
     
-    // Závěrečný výpis se ukáže taky jen, když Aether nemá zavřenou pusu
-    if !shut_up {
+    // Závěrečný výpis se ukáže taky jen v ukecaném režimu
+    if ukecany_rezim {
         println!("--- VÝSLEDEK BĚHU PROGRAMU ---");
         match result {
             evaluator::Object::Number(n) => println!("Vrácená hodnota: {}", n),
