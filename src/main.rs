@@ -48,25 +48,40 @@ for zbran in zbrane { print(zbran) }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.contains(&"--studio".to_string()) { serve_studio(); std::process::exit(0); }
     let config = Config::load();
-    if args.contains(&"--edit-config".to_string()) { let _ = Command::new(&config.editor).arg(&format!("{}/.aether_config", env::var("HOME").unwrap_or_else(|_| ".".to_string()))).status(); std::process::exit(0); }
-    
-    let mut filename = "";
+
+    // 1. ROZDĚLENÍ ARGUMENTŮ NA KOMPILÁTOR A SKRIPT (bezpečně!)
+    let mut compiler_args = Vec::new();
     let mut script_args = Vec::new();
-    let mut past_file = false;
-    for arg in args.iter().skip(1) { 
-        if !arg.starts_with("--") && filename.is_empty() { filename = arg; past_file = true; continue; }
-        if past_file { script_args.push(evaluator::Object::StringObj(arg.clone())); }
+    let mut filename = "".to_string();
+    let mut past_barrier = false;
+
+    for arg in args.iter().skip(1) {
+        if past_barrier {
+            script_args.push(evaluator::Object::StringObj(arg.clone()));
+        } else if arg == "--" {
+            past_barrier = true; // Našli jsme bariéru, vše dál je pro skript!
+        } else {
+            compiler_args.push(arg.clone());
+            if !arg.starts_with("--") && filename.is_empty() {
+                filename = arg.clone();
+            }
+        }
     }
+
+    if compiler_args.contains(&"--studio".to_string()) { serve_studio(); std::process::exit(0); }
+    if compiler_args.contains(&"--edit-config".to_string()) { let _ = Command::new(&config.editor).arg(&format!("{}/.aether_config", env::var("HOME").unwrap_or_else(|_| ".".to_string()))).status(); std::process::exit(0); }
     
     if filename.is_empty() { eprintln!("Chyba: Musíš zadat cestu k .ae souboru!"); std::process::exit(1); }
     if !filename.ends_with(".ae") { eprintln!("🛑 Formát musí být .ae"); std::process::exit(1); }
 
     let contents = fs::read_to_string(filename).unwrap_or_else(|_| { eprintln!("Nelze přečíst!"); std::process::exit(1); });
-    let mut env = evaluator::Environment::new(args.contains(&"--stop-shut-up".to_string()) || config.auto_verbose);
+    let ukecany_rezim = compiler_args.contains(&"--stop-shut-up".to_string()) || config.auto_verbose;
+    let insane_mode = compiler_args.contains(&"--be-insane".to_string());
+
+    let mut env = evaluator::Environment::new(ukecany_rezim && !insane_mode);
     
-    // VLOŽENÍ CLI ARGUMENTŮ DO AETHERU!
+    // BEZPEČNÉ PŘIDÁNÍ SYS_ARGS POUZE POKUD BYLY ZADÁNY ZA BARIÉROU
     env.set("SYS_ARGS".to_string(), evaluator::Object::Array(script_args));
 
     let lexer = lexer::Lexer::new(&contents);
