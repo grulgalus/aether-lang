@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Aether Studio</title><style>
+body { background: #1e1e1e; color: #fff; font-family: monospace; display: flex; flex-direction: column; padding: 20px; }
+textarea { background: #2d2d2d; color: #0f0; padding: 10px; font-size: 16px; border: 1px solid #444; min-height: 200px; }
+button { background: #007acc; color: white; border: none; padding: 10px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+#output { background: #000; padding: 15px; margin-top: 10px; min-height: 100px; border-left: 5px solid #007acc; white-space: pre-wrap;}
+</style></head>
+<body>
+    <h2>🚀 Aether Studio</h2>
+    <textarea id="code">print("Ahoj z Aetheru!")</textarea>
+    <button onclick="run()">▶ SPUSTIT</button>
+    <div id="output">Čekám na kód...</div>
+    <script>
+        async function run() {
+            let code = document.getElementById('code').value;
+            document.getElementById('output').innerText = "Zpracovávám...";
+            let res = await fetch('http://127.0.0.1:8765/run', { method: 'POST', body: code });
+            document.getElementById('output').innerText = await res.text();
+        }
+    </script>
+</body></html>
