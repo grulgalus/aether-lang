@@ -94,6 +94,8 @@ fn main() {
             evaluator::Object::Number(n) => println!("Vrácená hodnota: {}", n),
             evaluator::Object::StringObj(s) => println!("Vrácená hodnota: {}", s),
             evaluator::Object::Boolean(b) => println!("Vrácená hodnota: {}", b),
+            // TADY JE TA OPRAVA! Přidána podpora pro návrat Pole.
+            evaluator::Object::Array(arr) => println!("Vrácená hodnota: Pole (obsahuje {} polozek)", arr.len()),
             evaluator::Object::Null => println!("Program proběhl, ale nevrátil nic (Null)."),
         }
         println!("\n✅ Hotovo.");
