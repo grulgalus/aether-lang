@@ -32,9 +32,6 @@ impl Config {
     }
 }
 
-// ==========================================
-// ZABUDOVANÝ WEBOVÝ SERVER: AETHER STUDIO!
-// ==========================================
 fn serve_studio() {
     let listener = TcpListener::bind("127.0.0.1:8765").expect("Port 8765 je zabrany!");
     println!("==================================================");
@@ -49,19 +46,26 @@ fn serve_studio() {
             if let Ok(bytes_read) = stream.read(&mut buffer) {
                 let request = String::from_utf8_lossy(&buffer[..bytes_read]);
                 
-                // 1. Zpracování požadavku na IKONU!
+                // --- CHYTRÉ NAČÍTÁNÍ ZE SLOŽKY res/ ---
                 if request.starts_with("GET /icon.png ") {
-                    // Zkusíme načíst tvoji ikonu ze složky
-                    if let Ok(img) = fs::read("aether_space_icon.png") {
+                    // 1. Zkusíme načíst space ikonu
+                    if let Ok(img) = fs::read("res/aether_space_icon.png") {
                         let header = format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\n\r\n", img.len());
                         let _ = stream.write_all(header.as_bytes());
                         let _ = stream.write_all(&img);
-                    } else {
-                        // Pokud ikonu ještě nemáš staženou, nic to nerozbije
+                    } 
+                    // 2. Pokud není, zkusíme tu obyčejnou (plain) ikonu
+                    else if let Ok(img) = fs::read("res/aether_icon_plain.png") {
+                        let header = format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\n\r\n", img.len());
+                        let _ = stream.write_all(header.as_bytes());
+                        let _ = stream.write_all(&img);
+                    } 
+                    // 3. Kdyby tam nebylo nic
+                    else {
                         let _ = stream.write_all(b"HTTP/1.1 404 NOT FOUND\r\n\r\n");
                     }
                 }
-                // 2. Servírujeme HTML okno Aether Studia (přidáno logo!)
+                // Servírujeme HTML okno Aether Studia
                 else if request.starts_with("GET / ") || request.starts_with("GET / HTTP") {
                     let html = r#"<!DOCTYPE html><html><head><meta charset="utf-8">
                         <title>Aether Studio</title>
@@ -135,7 +139,6 @@ if stesti > 50 {
         }
     }
 }
-// ==========================================
 
 fn main() {
     let args: Vec<String> = env::args().collect();
