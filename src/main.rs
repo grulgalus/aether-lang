@@ -2,25 +2,82 @@ use std::env;
 use std::fs;
 use std::thread;
 use std::time::{Duration, Instant};
+use std::process::Command;
 
 mod lexer;
 mod ast;
 mod parser;
 mod evaluator;
 
+// 1. ZAVÁDÍME KONFIGURAČNÍ STRUKTURU!
+struct Config {
+    language: String,
+    auto_open_broken: bool,
+    auto_verbose: bool,
+    editor: String,
+}
+
+impl Config {
+    fn load() -> Self {
+        // Získáme domácí složku uživatele (funguje v Linuxu i Android Termuxu)
+        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let config_path = format!("{}/.aether_config", home);
+        
+        let mut conf = Config {
+            language: "cz".to_string(),
+            auto_open_broken: false,
+            auto_verbose: false,
+            editor: "nano".to_string(),
+        };
+
+        if let Ok(content) = fs::read_to_string(&config_path) {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.split('=').collect();
+                if parts.len() == 2 {
+                    let key = parts[0].trim();
+                    let val = parts[1].trim();
+                    match key {
+                        "language-of-aether" => conf.language = val.to_string(),
+                        "auto-open-file-if-is-broken" => conf.auto_open_broken = val == "on",
+                        "auto-stop-shut-up-compilator" => conf.auto_verbose = val == "on",
+                        "default-editor-command" => conf.editor = val.to_string(),
+                        _ => {}
+                    }
+                }
+            }
+        } else {
+            // Pokud config ještě neexistuje, Aether ho sám vytvoří!
+            let default_cfg = "language-of-aether=cz\nauto-open-file-if-is-broken=on\nauto-stop-shut-up-compilator=off\ndefault-editor-command=nano\n";
+            let _ = fs::write(&config_path, default_cfg);
+            conf.auto_open_broken = true;
+        }
+        conf
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let config = Config::load();
+
+    // 2. MAGICKÝ PŘÍKAZ PRO EDITACI CONFIGU
+    if args.contains(&"--edit-config".to_string()) {
+        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let config_path = format!("{}/.aether_config", home);
+        println!("⚙️ Otevírám konfiguraci přes editor: {}", config.editor);
+        let _ = Command::new(&config.editor).arg(&config_path).status();
+        std::process::exit(0);
+    }
+
+    if args.len() < 2 { eprintln!("Použití: aether <soubor.ae> [--stop-shut-up] [--be-insane] [--edit-config]"); std::process::exit(1); }
     
-    if args.len() < 2 { eprintln!("Použití: aether <soubor.ae> [--stop-shut-up] [--be-insane]"); std::process::exit(1); }
-    
-    let ukecany_rezim = args.contains(&"--stop-shut-up".to_string());
+    // Spojíme ruční zapnutí s tím v configu!
+    let ukecany_rezim = args.contains(&"--stop-shut-up".to_string()) || config.auto_verbose;
     let insane_mode = args.contains(&"--be-insane".to_string());
     
     let mut filename = "";
-    for arg in args.iter().skip(1) { if arg != "--stop-shut-up" && arg != "--be-insane" { filename = arg; break; } }
+    for arg in args.iter().skip(1) { if !arg.starts_with("--") { filename = arg; break; } }
     if filename.is_empty() { eprintln!("Chyba: Musíš zadat cestu k .ae souboru!"); std::process::exit(1); }
 
-    // --- TVRĎÁCKÁ KONTROLA PŘÍPONY ---
     if !filename.ends_with(".ae") {
         let spatna_pripona = filename.split('.').last().unwrap_or("bez_pripony");
         eprintln!("🛑 [KRITICKÁ CHYBA FORMÁTU] Co to na mě zkoušíš za formát? '.{}'?!", spatna_pripona);
@@ -29,8 +86,23 @@ fn main() {
     }
 
     let contents = match fs::read_to_string(filename) { Ok(c) => c, Err(_) => { eprintln!("Chyba: Nelze přečíst soubor '{}'", filename); std::process::exit(1); } };
-    
     let exec_start = Instant::now();
+            
+    let lexer = lexer::Lexer::new(&contents);
+    let mut parser = parser::Parser::new(lexer);
+    let program = parser.parse_program();
+
+    // 3. AUTO-OPEN KDYŽ JE SOUBOR ROZBITÝ
+    if program.statements.is_empty() && !contents.trim().is_empty() {
+        eprintln!("🛑 [SYNTAX ERROR] Kompilátor nedokázal přečíst kód! Zřejmě jsi udělal hrubou chybu v syntaxi.");
+        if config.auto_open_broken {
+            eprintln!("🛠️ 'auto-open-file-if-is-broken' je ZAPNUTO. Otevírám {} pomocí {}...", filename, config.editor);
+            let _ = Command::new(&config.editor).arg(filename).status();
+        } else {
+            eprintln!("💡 Tip: Zapni si 'auto-open-file-if-is-broken=on' v '--edit-config', aether ti ho sám otevře k opravě!");
+        }
+        std::process::exit(1);
+    }
         
     if insane_mode {
         println!("\nerror[E0596]: cannot borrow `reality` as mutable, as it is not declared as mutable");
@@ -42,7 +114,6 @@ fn main() {
     } else if ukecany_rezim {
         let line_count = contents.lines().count();
         let file_size = contents.len();
-        
         let os_info = env::consts::OS;
         let arch_info = env::consts::ARCH;
         
@@ -50,19 +121,16 @@ fn main() {
         println!("🌌 AETHER COMPILER DIAGNOSTICS & SYSTEM INFO");
         println!("==================================================");
         println!("📌 Verze kompilátoru: v0.1.0-masterclass");
+        println!("🌍 Jazyk Aetheru:      {}", config.language);
+        println!("⚙️  Výchozí editor:    {}", config.editor);
         println!("🖥️  Cílový systém:     {} ({})", os_info, arch_info);
         println!("📂 Zpracováván soubor: {}", filename);
         println!("📊 Statistiky kódu:   {} řádků | {} bytů", line_count, file_size);
-        // Tady už si kompilátor nemusí nic tipovat, protože ví, že to musí být .ae!
         println!("🏷️  Typ souboru:       .ae (Ověřeno & Validní)");
         println!("==================================================");
         println!("✨ Fáze 1: Lexikální a syntaktická analýza...");
         println!("🚀 Fáze 2: Spouštím virtuální stroj Aetheru...\n");
     }
-            
-    let lexer = lexer::Lexer::new(&contents);
-    let mut parser = parser::Parser::new(lexer);
-    let program = parser.parse_program();
     
     let mut env = evaluator::Environment::new(ukecany_rezim && !insane_mode);
     let result = evaluator::eval_program(&program, &mut env);
@@ -71,7 +139,6 @@ fn main() {
 
     if ukecany_rezim && !insane_mode {
         let exec_duration = exec_start.elapsed();
-        
         println!("\n==================================================");
         println!("--- VÝSLEDEK BĚHU PROGRAMU ---");
         match result {
