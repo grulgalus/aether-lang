@@ -1,16 +1,16 @@
-name: Aether CI
+name: Aether Test Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "*" ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  test-and-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +21,7 @@ jobs:
       with:
         targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-linux-android
         
-    - name: Configure Cargo for Linux ARM cross-compilation
+    - name: Configure Cargo for Linux ARM
       run: |
         sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
         mkdir -p .cargo
@@ -33,41 +33,31 @@ jobs:
         cargo build --release --target x86_64-unknown-linux-gnu
         cargo build --release --target aarch64-unknown-linux-gnu
 
-    - name: Install cargo-deb
-      run: cargo install cargo-deb
+    - name: Install Tools (deb & ndk)
+      run: |
+        cargo install cargo-deb
+        cargo install cargo-ndk
 
-    # KROK 1: Vytvoříme ten .deb balíček
-    - name: Build Standard PC .deb package
+    - name: Build PC .deb
       run: cargo deb --target x86_64-unknown-linux-gnu --no-build
 
-    # KROK 2: Fyzicky ho nainstalujeme do Ubuntu!
     - name: INSTALL .DEB SYSTEM WIDE
-      run: |
-        echo "📦 Instaluji systémový balíček Aether z .deb!"
-        sudo dpkg -i target/x86_64-unknown-linux-gnu/debian/*.deb
+      run: sudo dpkg -i target/x86_64-unknown-linux-gnu/debian/*.deb
 
-    # KROK 3: Zavoláme E2E test přímo pomocí systémového příkazu 'aether'
-    - name: Run Automated Aether Tests (from .deb install!)
+    - name: Run Automated Aether Tests (E2E)
       run: |
-        echo "🚀 Spouštím automatické testy z nainstalovaného balíčku!"
+        echo "🚀 Spouštím E2E testy z instalace..."
         for script in tests/*.ae; do
-          echo "----------------------------------------"
           echo "📜 Testuji: $script"
           aether "$script"
         done
-        echo "✅ Všechny testy úspěšně proběhly na zkompilovaném balíčku!"
 
-    - name: Build ARM .deb (Raspberry Pi atd.)
+    - name: Build ARM .deb
       run: cargo deb --target aarch64-unknown-linux-gnu --no-build
 
-    - name: Install cargo-ndk
-      run: cargo install cargo-ndk
-
-    - name: Build Termux Native (Android aarch64)
-      run: cargo ndk -t arm64-v8a build --release
-
-    - name: Build 100% Native Termux .deb
+    - name: Build Termux Native (Android aarch64) & Create .deb
       run: |
+        cargo ndk -t arm64-v8a build --release
         mkdir -p termux_pkg/data/data/com.termux/files/usr/bin
         mkdir -p termux_pkg/DEBIAN
         cp target/aarch64-linux-android/release/aether termux_pkg/data/data/com.termux/files/usr/bin/
@@ -77,16 +67,9 @@ jobs:
         Version: 0.1.0-termux
         Architecture: aarch64
         Maintainer: Aether Developer
-        Description: Aether Compiler (100% Native Android/Termux Edition)
+        Description: Aether Compiler (Test Build)
         CTRL
         dpkg-deb --build termux_pkg target/aether-termux_0.1.0-1_aarch64.deb
 
-    - name: Upload .deb Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: aether-debian-packages
-        path: |
-          target/debian/*.deb
-          target/x86_64-unknown-linux-gnu/debian/*.deb
-          target/aarch64-unknown-linux-gnu/debian/*.deb
-          target/aether-termux_0.1.0-1_aarch64.deb
+    - name: ✅ Pipeline Completed
+      run: echo "Všechny testy i buildy .deb proběhly úspěšně!"

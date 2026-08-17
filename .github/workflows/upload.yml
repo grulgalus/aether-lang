@@ -1,0 +1,69 @@
+name: Aether Upload Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-linux-android
+        
+    - name: Configure Cargo for Linux ARM
+      run: |
+        sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+        mkdir -p .cargo
+        echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
+        echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+
+    - name: Build Standard Linux binaries
+      run: |
+        cargo build --release --target x86_64-unknown-linux-gnu
+        cargo build --release --target aarch64-unknown-linux-gnu
+
+    - name: Install Tools (deb & ndk)
+      run: |
+        cargo install cargo-deb
+        cargo install cargo-ndk
+
+    - name: Build PC .deb
+      run: cargo deb --target x86_64-unknown-linux-gnu --no-build
+
+    - name: Build ARM .deb
+      run: cargo deb --target aarch64-unknown-linux-gnu --no-build
+
+    - name: Build Termux Native (Android aarch64) & Create .deb
+      run: |
+        cargo ndk -t arm64-v8a build --release
+        mkdir -p termux_pkg/data/data/com.termux/files/usr/bin
+        mkdir -p termux_pkg/DEBIAN
+        cp target/aarch64-linux-android/release/aether termux_pkg/data/data/com.termux/files/usr/bin/
+        chmod 755 termux_pkg/data/data/com.termux/files/usr/bin/aether
+        cat << 'CTRL' > termux_pkg/DEBIAN/control
+        Package: aether
+        Version: 0.1.0-termux
+        Architecture: aarch64
+        Maintainer: Aether Developer
+        Description: Aether Compiler (100% Native Android/Termux Edition)
+        CTRL
+        dpkg-deb --build termux_pkg target/aether-termux_0.1.0-1_aarch64.deb
+
+    - name: 📦 Upload .deb Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: aether-debian-packages
+        path: |
+          target/debian/*.deb
+          target/x86_64-unknown-linux-gnu/debian/*.deb
+          target/aarch64-unknown-linux-gnu/debian/*.deb
+          target/aether-termux_0.1.0-1_aarch64.deb
