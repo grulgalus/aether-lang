@@ -49,6 +49,39 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
         Expr::Call { function, args } => {
             let mut eval_args = Vec::new(); for arg in args { eval_args.push(eval_expression(arg, env)); }
             match function.as_str() {
+                // ==========================================
+                // SECRETS A DATA PARSERY (TVŮJ NÁPAD!)
+                // ==========================================
+                "env" => {
+                    if let Some(Object::StringObj(k)) = eval_args.get(0) { return Object::StringObj(std::env::var(k).unwrap_or_else(|_| "".to_string())); } Object::Null
+                },
+                "load_env" => {
+                    if let Some(Object::StringObj(path)) = eval_args.get(0) {
+                        let mut map = HashMap::new();
+                        if let Ok(content) = std::fs::read_to_string(path) {
+                            for line in content.lines() {
+                                let l = line.trim();
+                                if l.is_empty() || l.starts_with('#') { continue; }
+                                if let Some((k, v)) = l.split_once('=') {
+                                    let val = v.trim().trim_matches('"').trim_matches('\''); // Ořízne uvozovky
+                                    map.insert(k.trim().to_string(), Object::StringObj(val.to_string()));
+                                }
+                            }
+                        }
+                        return Object::Dict(map);
+                    }
+                    Object::Null
+                },
+                "parse_json" => {
+                    // Aether používá svůj vlastní kompilátor k parsování JSONu, protože syntaxe je stejná! 🤯
+                    if let Some(Object::StringObj(content)) = eval_args.get(0) {
+                        let lexer = Lexer::new(&content); let mut parser = Parser::new(lexer); let program = parser.parse_program();
+                        if let Some(Stmt::Expression(expr)) = program.statements.first() { return eval_expression(expr, env); }
+                    }
+                    Object::Null
+                },
+                "read" => { if let Some(Object::StringObj(path)) = eval_args.get(0) { if let Ok(content) = std::fs::read_to_string(path) { return Object::StringObj(content); } } Object::Null },
+                // ==========================================
                 "type" => { if let Some(arg) = eval_args.get(0) { return Object::StringObj(match arg { Object::Number(_) => "number", Object::StringObj(_) => "string", Object::Boolean(_) => "boolean", Object::Array(_) => "array", Object::Dict(_) => "dict", Object::Null => "null" }.to_string()); } Object::Null },
                 "time" => { let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(); return Object::Number(t as f64); },
                 "keys" => { if let Some(Object::Dict(map)) = eval_args.get(0) { return Object::Array(map.keys().map(|k| Object::StringObj(k.clone())).collect()); } Object::Null },
