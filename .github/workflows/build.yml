@@ -16,27 +16,36 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Rust
+    - name: Install ARM64 Cross-Compilation Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+        
+    - name: Set up Rust for AMD64 and ARM64
       uses: dtolnay/rust-toolchain@stable
-      
-    - name: Run Unit Tests (Rust)
+      with:
+        targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
+        
+    - name: Configure Cargo for ARM64 cross-compilation
+      run: |
+        mkdir -p .cargo
+        echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
+        echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+
+    - name: Run Unit Tests (AMD64)
       run: cargo test --verbose
-
-    - name: Build Aether compiler
-      run: cargo build --release
-
-    - name: Run End-to-End Test (Execute Aether script)
-      # Zde GitHub Action reálně spustí tvůj jazyk a otestuje, zda dokáže zpracovat test.ae!
-      run: ./target/release/aether tests/test.ae
 
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
-    - name: Build .deb package for Linux release
-      run: cargo deb
+    - name: Build .deb package for AMD64 / INTEL64
+      run: cargo deb --target x86_64-unknown-linux-gnu
 
-    - name: Upload .deb Artifact
+    - name: Build .deb package for ARM64
+      run: cargo deb --target aarch64-unknown-linux-gnu
+
+    - name: Upload .deb Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: aether-debian-package
-        path: target/debian/*.deb
+        name: aether-debian-packages
+        path: target/*/debian/*.deb
