@@ -13,13 +13,11 @@ mod parser;
 mod ast;
 mod evaluator;
 
-// Cesta ke konfiguraci (v domovské složce Termuxu/Linuxu)
 fn get_config_path() -> String {
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
     format!("{}/.aether-config", home)
 }
 
-// Ujistíme se, že config existuje
 fn ensure_config_exists() -> String {
     let path = get_config_path();
     if !std::path::Path::new(&path).exists() {
@@ -29,7 +27,6 @@ fn ensure_config_exists() -> String {
     path
 }
 
-// Přečtení konkrétní hodnoty z configu
 fn read_config_value(key: &str) -> String {
     let path = ensure_config_exists();
     if let Ok(content) = fs::read_to_string(&path) {
@@ -40,19 +37,29 @@ fn read_config_value(key: &str) -> String {
         }
     }
     if key == "default-editor-command" { return "nano".to_string(); }
+    if key == "language-of-aether" { return "en".to_string(); }
     "off".to_string()
+}
+
+// 🌍 PŘEKLADAČ: Rychlá funkce, která vybírá text podle configu
+fn tr(en: &str, cs: &str) -> String {
+    if read_config_value("language-of-aether") == "cs" {
+        cs.to_string()
+    } else {
+        en.to_string() // "en" je teď default!
+    }
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         println!("🔮 Aether Lang v1.0.0");
-        println!("Použití:");
-        println!("  aether <soubor.ae>    - Spustí skript");
-        println!("  aether --studio       - Spustí webové IDE");
-        println!("  aether --config       - Zobrazí konfiguraci");
-        println!("  aether --edit-config  - Upraví konfiguraci");
-        println!("  aether --help         - Zobrazí nápovědu");
+        println!("{}", tr("Usage:", "Použití:"));
+        println!("  aether <file.ae>      - {}", tr("Run script", "Spustí skript"));
+        println!("  aether --studio       - {}", tr("Launch Web IDE", "Spustí webové IDE"));
+        println!("  aether --config       - {}", tr("Show config", "Zobrazí konfiguraci"));
+        println!("  aether --edit-config  - {}", tr("Edit config", "Upraví konfiguraci"));
+        println!("  aether --help         - {}", tr("Show help", "Zobrazí nápovědu"));
         return;
     }
 
@@ -60,36 +67,34 @@ fn main() {
     ensure_config_exists();
 
     match prikaz {
-        "--help" => { println!("Nápověda pro Aether..."); return; },
+        "--help" => { println!("{}", tr("Help for Aether...", "Nápověda pro Aether...")); return; },
         "--config" => {
             let path = get_config_path();
-            println!("🔧 Konfigurace Aetheru ({}):", path);
+            println!("🔧 {} ({}):", tr("Aether Configuration", "Konfigurace Aetheru"), path);
             println!("{}", fs::read_to_string(&path).unwrap_or_default());
             return;
         },
         "--edit-config" => {
             let path = get_config_path();
             let editor = read_config_value("default-editor-command");
-            println!("📝 Otevírám konfiguraci v editoru: {}", editor);
+            println!("📝 {} {}", tr("Opening config in editor:", "Otevírám konfiguraci v editoru:"), editor);
             let _ = Command::new(&editor).arg(&path).status();
             return;
         },
         "--studio" => {
-            println!("🚀 Spouštím Aether Studio na http://127.0.0.1:8765");
+            println!("🚀 {} http://127.0.0.1:8765", tr("Launching Aether Studio on", "Spouštím Aether Studio na"));
             start_studio();
             return;
         },
         _ => {} 
     }
 
-    // Čteme config + vlaječky pro umlčení stopek atd.
     let stop_shut_up = args.contains(&"--stop-shut-up".to_string()) || read_config_value("auto-stop-shut-up-compilator") == "on";
-
     let start = Instant::now();
     let obsah = match fs::read_to_string(prikaz) {
         Ok(c) => c,
         Err(_) => {
-            if !stop_shut_up { println!("🛑 KRITICKÁ CHYBA: Soubor '{}' neexistuje!", prikaz); }
+            if !stop_shut_up { println!("🛑 {}: '{}' {}!", tr("CRITICAL ERROR", "KRITICKÁ CHYBA"), prikaz, tr("does not exist", "neexistuje")); }
             return;
         }
     };
@@ -104,22 +109,20 @@ fn main() {
     if let Object::Error(e) = vysledek {
         if !stop_shut_up { println!("{}", e); }
         
-        // ZLATÝ HŘEB: Pokud je kód rozbitý a máš nastavený auto-open, tak ti rovnou otevře Nano!
         if read_config_value("auto-open-file-if-is-broken") == "on" {
             let editor = read_config_value("default-editor-command");
-            println!("🔧 Otevírám rozbitý soubor v editoru {}...", editor);
+            println!("🔧 {} {}...", tr("Opening broken file in editor", "Otevírám rozbitý soubor v editoru"), editor);
             let _ = Command::new(&editor).arg(prikaz).status();
         }
     }
     
     if !stop_shut_up {
-        println!("\n⏱️ Dokončeno za: {:.2?}", start.elapsed());
+        println!("\n⏱️ {}: {:.2?}", tr("Finished in", "Dokončeno za"), start.elapsed());
     }
 }
 
-// 🌐 WEBOVÝ SERVER PRO AETHER STUDIO
 fn start_studio() {
-    let listener = match TcpListener::bind("127.0.0.1:8765") { Ok(l) => l, Err(_) => { println!("Port 8765 je obsazený."); return; } };
+    let listener = match TcpListener::bind("127.0.0.1:8765") { Ok(l) => l, Err(_) => { println!("{}", tr("Port 8765 is occupied.", "Port 8765 je obsazený.")); return; } };
     for stream in listener.incoming() {
         if let Ok(mut stream) = stream {
             let mut buffer = [0; 4096];
@@ -130,7 +133,7 @@ fn start_studio() {
                     let code = request[body_start + 4..].trim_matches(char::from(0)).trim().to_string();
                     let lexer = Lexer::new(&code); let mut parser = Parser::new(lexer); let program = parser.parse_program(); let mut env = Environment::new();
                     eval_program(&program, &mut env);
-                    let mut vystup = env.output.join("\n"); if vystup.is_empty() { vystup = "OK (Bez výstupu)".to_string(); }
+                    let mut vystup = env.output.join("\n"); if vystup.is_empty() { vystup = "OK".to_string(); }
                     let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}", vystup);
                     let _ = stream.write_all(response.as_bytes());
                 }
