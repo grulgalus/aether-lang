@@ -1,0 +1,87 @@
+name: 🚀 Auto Release Aether (v*)
+
+on:
+  push:
+    tags:
+      - 'release-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # --- 1. ANDROID APK ---
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: 'zulu', java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v3
+        with: { gradle-version: '8.4' }
+      - uses: android-actions/setup-android@v3
+      - run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.2.9519653"
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: 'aarch64-linux-android, armv7-linux-androideabi' }
+      - run: cargo install cargo-ndk
+      - working-directory: aether-jni
+        env: { ANDROID_NDK_HOME: '${{ env.ANDROID_HOME }}/ndk/25.2.9519653' }
+        run: cargo ndk -t arm64-v8a -t armeabi-v7a -o ../android-app/app/src/main/jniLibs build --release
+      - working-directory: android-app
+        run: gradle assembleDebug
+      - run: mv android-app/app/build/outputs/apk/debug/app-debug.apk Aether-Studio.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android-apk, path: Aether-Studio.apk }
+
+  # --- 2. LINUX A TERMUX (.deb a Binárka) ---
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: Vytvoření .deb balíčku
+        run: |
+          cargo install cargo-deb
+          cargo deb
+          cp target/debian/*.deb aether-linux-termux.deb
+      - name: Přejmenování holé binárky
+        run: mv target/release/aether aether-linux-bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            aether-linux-bin
+            aether-linux-termux.deb
+
+  # --- 3. WINDOWS (.exe) ---
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - run: mv target/release/aether.exe aether-windows.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: windows-build, path: aether-windows.exe }
+
+  # --- 4. GITHUB RELEASE (Sesbírá a zveřejní vše) ---
+  create-release:
+    needs: [build-android, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Rozbalení a příprava souborů
+        run: find artifacts -type f -exec mv {} . \;
+      - name: 🚀 Vytvoření Oficiálního Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Aether-Studio.apk
+            aether-windows.exe
+            aether-linux-bin
+            aether-linux-termux.deb
+          generate_release_notes: true
