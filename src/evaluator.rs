@@ -6,9 +6,10 @@ use crate::parser::Parser;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object { Number(f64), StringObj(String), Boolean(bool), Array(Vec<Object>), Null }
 
-pub struct Environment { store: HashMap<String, Object> }
+// Přidali jsme 'verbose: bool', aby mozek věděl, jestli smí mluvit!
+pub struct Environment { pub store: HashMap<String, Object>, pub verbose: bool }
 impl Environment {
-    pub fn new() -> Self { Environment { store: HashMap::new() } }
+    pub fn new(verbose: bool) -> Self { Environment { store: HashMap::new(), verbose } }
     pub fn set(&mut self, name: String, val: Object) { self.store.insert(name, val); }
     pub fn get(&self, name: &str) -> Option<Object> { self.store.get(name).cloned() }
 }
@@ -23,15 +24,18 @@ fn eval_block(statements: &[Stmt], env: &mut Environment) -> Object {
 
 fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
     match stmt {
-        // TADY JE MAGIE IMPORTU!
         Stmt::Import(path) => {
+            // TADY JE TA MAGIE: Kompilátor vypíše info o importu JEN KDYŽ NEDRŽÍ PUSU!
+            if env.verbose {
+                println!("📦 Nacitam importovany modul: {}", path);
+            }
             if let Ok(content) = std::fs::read_to_string(path) {
                 let lexer = Lexer::new(&content);
                 let mut parser = Parser::new(lexer);
                 let program = parser.parse_program();
                 eval_block(&program.statements, env);
             } else {
-                println!("[CHYBA] Nelze najit a nacist modul: {}", path);
+                if env.verbose { println!("[CHYBA] Nelze najit a nacist modul: {}", path); }
             }
             Object::Null
         }

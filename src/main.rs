@@ -30,7 +30,6 @@ fn main() {
         println!("\n[FATAL] Segmentation fault (core dumped) in Android Bionic libc.");
         println!("Warning: The compiler is experiencing existential dread...\n\n...just kidding. Všechno je v pohodě.\n");
     } else if ukecany_rezim {
-        // TADY JSOU TVÉ STATISTIKY SOUBORU!
         let line_count = contents.lines().count();
         let file_size = contents.len();
         let ext = filename.split('.').last().unwrap_or("neznámý");
@@ -46,7 +45,8 @@ fn main() {
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
     
-    let mut env = evaluator::Environment::new();
+    // TADY TO JE! Pošleme do mozku Aetheru příkaz: "Máš povolený ukecaný režim?"
+    let mut env = evaluator::Environment::new(ukecany_rezim && !insane_mode);
     let result = evaluator::eval_program(&program, &mut env);
     
     if insane_mode { println!("\n========================================\n[CRITICAL ERROR] Task failed successfully.\nV RAM zůstalo viset 128 GB dat a tvůj procesor hoří. Hodně štěstí."); std::process::exit(0); }

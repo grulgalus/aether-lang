@@ -8,7 +8,7 @@ actor Aplikace {
         // Použijeme proměnné z jiné složky!
         print("Tohle heslo jsme stahli z jineho souboru:")
         print(TAJNE_HESLO)
-        
-        return verze
+
+        print(verze)        
     }
 }
