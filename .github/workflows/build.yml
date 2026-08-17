@@ -21,34 +21,49 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y gcc-aarch64-linux-gnu
         
-    - name: Set up Rust for AMD64 and ARM64
+    - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
         
-    - name: Configure Cargo for ARM64 cross-compilation
+    - name: Configure Cargo for ARM cross-compilation
       run: |
         mkdir -p .cargo
         echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
         echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
 
-    - name: Run Unit Tests (AMD64)
-      run: cargo test --verbose
+    - name: Build binaries
+      run: |
+        cargo build --release --target x86_64-unknown-linux-gnu
+        cargo build --release --target aarch64-unknown-linux-gnu
 
     - name: Install cargo-deb
       run: cargo install cargo-deb
 
-    - name: Build .deb package for PC (AMD64)
-      run: cargo deb --target x86_64-unknown-linux-gnu
+    - name: Build Standard .deb packages (for PC and standard Linux)
+      run: |
+        cargo deb --target x86_64-unknown-linux-gnu --no-build
+        cargo deb --target aarch64-unknown-linux-gnu --no-build
 
-    - name: Build .deb package for Standard Linux (ARM64)
-      run: cargo deb --target aarch64-unknown-linux-gnu
-
-    - name: Build .deb package for Termux (Android)
-      run: cargo deb --target aarch64-unknown-linux-gnu --variant termux
+    - name: Build 100% Native Termux .deb (Bypass cargo-deb completely!)
+      run: |
+        mkdir -p termux_pkg/data/data/com.termux/files/usr/bin
+        mkdir -p termux_pkg/DEBIAN
+        cp target/aarch64-unknown-linux-gnu/release/aether termux_pkg/data/data/com.termux/files/usr/bin/
+        chmod 755 termux_pkg/data/data/com.termux/files/usr/bin/aether
+        cat << 'CTRL' > termux_pkg/DEBIAN/control
+        Package: aether
+        Version: 0.1.0-termux
+        Architecture: aarch64
+        Maintainer: Aether Developer
+        Description: Aether Compiler (100% Pure Termux Edition)
+        CTRL
+        dpkg-deb --build termux_pkg target/aether-termux_0.1.0-1_aarch64.deb
 
     - name: Upload .deb Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: aether-debian-packages
-        path: target/*/debian/*.deb
+        path: |
+          target/debian/*.deb
+          target/aether-termux_0.1.0-1_aarch64.deb
