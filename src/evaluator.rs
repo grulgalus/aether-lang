@@ -2,10 +2,9 @@ use std::collections::HashMap;
 use crate::ast::{Program, Stmt, Expr};
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Object { Number(f64), StringObj(String), Boolean(bool), Null }
+pub enum Object { Number(f64), StringObj(String), Boolean(bool), Array(Vec<Object>), Null }
 
 pub struct Environment { store: HashMap<String, Object> }
-
 impl Environment {
     pub fn new() -> Self { Environment { store: HashMap::new() } }
     pub fn set(&mut self, name: String, val: Object) { self.store.insert(name, val); }
@@ -16,25 +15,32 @@ pub fn eval_program(program: &Program, env: &mut Environment) -> Object { eval_b
 
 fn eval_block(statements: &[Stmt], env: &mut Environment) -> Object {
     let mut result = Object::Null;
-    for stmt in statements {
-        result = eval_statement(stmt, env);
-        if let Stmt::Return { .. } = stmt { break; }
-    }
+    for stmt in statements { result = eval_statement(stmt, env); if let Stmt::Return { .. } = stmt { break; } }
     result
 }
 
 fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
     match stmt {
-        Stmt::Let { name, value } | Stmt::Assign { name, value } => {
-            let val = eval_expression(value, env); env.set(name.clone(), val); Object::Null
-        }
+        Stmt::Let { name, value } | Stmt::Assign { name, value } => { let val = eval_expression(value, env); env.set(name.clone(), val); Object::Null }
         Stmt::Expression(expr) => { eval_expression(expr, env); Object::Null }
         Stmt::Return { value } => eval_expression(value, env),
         Stmt::Print { value } => {
-            match eval_expression(value, env) {
-                Object::Number(n) => println!("{}", n), Object::StringObj(s) => println!("{}", s),
-                Object::Boolean(b) => println!("{}", b), Object::Null => println!("null"),
+            fn format_obj(obj: &Object) -> String {
+                match obj {
+                    Object::Number(n) => n.to_string(),
+                    Object::StringObj(s) => s.clone(),
+                    Object::Boolean(b) => b.to_string(),
+                    Object::Array(arr) => {
+                        let strings: Vec<String> = arr.iter().map(|x| match x {
+                            Object::StringObj(s) => format!("\"{}\"", s), // V poli stringy obalíme uvozovkami
+                            _ => format_obj(x)
+                        }).collect();
+                        format!("[{}]", strings.join(", "))
+                    }
+                    Object::Null => "null".to_string(),
+                }
             }
+            println!("{}", format_obj(&eval_expression(value, env)));
             Object::Null
         }
         Stmt::Actor { methods, .. } => eval_block(methods, env),
@@ -61,11 +67,22 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
     match expr {
         Expr::Number(s) => Object::Number(s.parse().unwrap_or(0.0)),
         Expr::StringLit(s) => Object::StringObj(s.clone()), Expr::Boolean(b) => Object::Boolean(*b),
-        Expr::Identifier(s) => {
-            if s == "input" {
-                let mut line = String::new(); std::io::stdin().read_line(&mut line).unwrap_or(0);
-                return Object::StringObj(line.trim().to_string());
+        Expr::Array(elements) => {
+            let mut evaluated = Vec::new();
+            for el in elements { evaluated.push(eval_expression(el, env)); }
+            Object::Array(evaluated)
+        }
+        Expr::Index { left, index } => {
+            let left_val = eval_expression(left, env);
+            let index_val = eval_expression(index, env);
+            if let (Object::Array(arr), Object::Number(i)) = (left_val, index_val) {
+                let idx = i as usize;
+                if idx < arr.len() { return arr[idx].clone(); }
             }
+            Object::Null
+        }
+        Expr::Identifier(s) => {
+            if s == "input" { let mut line = String::new(); std::io::stdin().read_line(&mut line).unwrap_or(0); return Object::StringObj(line.trim().to_string()); }
             env.get(s).unwrap_or(Object::Null)
         }
         Expr::Call { function, args } => {
@@ -73,33 +90,27 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
             for arg in args { eval_args.push(eval_expression(arg, env)); }
             
             match function.as_str() {
-                // Přímý přístup do BASH SHELLU!
-                "cmd" => {
-                    if let Some(Object::StringObj(command)) = eval_args.get(0) {
-                        if let Ok(output) = std::process::Command::new("sh").arg("-c").arg(command).output() {
-                            return Object::StringObj(String::from_utf8_lossy(&output.stdout).to_string());
-                        }
-                    }
-                    Object::Null
-                },
-                // Čtení OS souborů
-                "read" => {
-                    if let Some(Object::StringObj(path)) = eval_args.get(0) {
-                        if let Ok(content) = std::fs::read_to_string(path) { return Object::StringObj(content); }
-                    }
-                    Object::Null
-                },
-                // Zápis do OS souborů
-                "write" => {
-                    if let (Some(Object::StringObj(path)), Some(Object::StringObj(content))) = (eval_args.get(0), eval_args.get(1)) {
-                        let _ = std::fs::write(path, content);
-                    }
-                    Object::Null
-                },
-                // Zjištění délky textu
+                "cmd" => { if let Some(Object::StringObj(command)) = eval_args.get(0) { if let Ok(output) = std::process::Command::new("sh").arg("-c").arg(command).output() { return Object::StringObj(String::from_utf8_lossy(&output.stdout).to_string()); } } Object::Null },
+                "read" => { if let Some(Object::StringObj(path)) = eval_args.get(0) { if let Ok(content) = std::fs::read_to_string(path) { return Object::StringObj(content); } } Object::Null },
+                "write" => { if let (Some(Object::StringObj(path)), Some(Object::StringObj(content))) = (eval_args.get(0), eval_args.get(1)) { let _ = std::fs::write(path, content); } Object::Null },
+                
+                // Polymorfní len() (funguje na stringy i pole!)
                 "len" => {
                     if let Some(Object::StringObj(s)) = eval_args.get(0) { return Object::Number(s.len() as f64); }
+                    if let Some(Object::Array(arr)) = eval_args.get(0) { return Object::Number(arr.len() as f64); }
                     Object::Null
+                },
+                // Vložení položky do pole
+                "push" => {
+                    if let (Some(Object::Array(mut arr)), Some(val)) = (eval_args.get(0).cloned(), eval_args.get(1).cloned()) {
+                        arr.push(val); return Object::Array(arr);
+                    }
+                    Object::Null
+                },
+                // Magie - generátor náhodných čísel od 0 do 99!
+                "rand" => {
+                    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+                    return Object::Number((t % 100) as f64);
                 }
                 _ => Object::Null
             }

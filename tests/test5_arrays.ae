@@ -1,0 +1,33 @@
+actor Hra {
+    fn main() {
+        print("--- INVENTAR SYSTEM ---")
+        
+        let batoh = ["mec", "lektvar", "stit"]
+        print("Co vsechno je v batohu?")
+        print(batoh)
+        
+        print("Prvni vec v batohu je:")
+        print(batoh[0])
+        
+        print("Nasel jsi zlate mince! Pridavam...")
+        batoh = push(batoh, "zlate mince")
+        print(batoh)
+        
+        let pocet = len(batoh)
+        print("Pocet veci v batohu:")
+        print(pocet)
+        
+        print("--- GENERATOR NAHODY ---")
+        let stesti = rand()
+        print("Tvoje dnesni stesti (0-99) je:")
+        print(stesti)
+        
+        if stesti > 50 {
+            print("Dnesni den bude skvely, priseru porazis!")
+        } else {
+            print("Ou, radsi se schovej, stesti te opustilo.")
+        }
+        
+        return pocet
+    }
+}
