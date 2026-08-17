@@ -1,24 +1,10 @@
 [package]
 name = "aether"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
-description = "A modern, fast, and memory-safe programming language"
-license = "MIT"
-repository = "https://github.com/tvoje-jmeno/aether-lang"
+description = "Aether Programming Language & Studio"
 
 [dependencies]
-
-[package.metadata.deb]
-maintainer = "Aether Developer"
-copyright = "2026, Aether Project"
-extended-description = "Aether Compiler: Lexer, Parser and core language tools."
-section = "devel"
-
-# Opravený profil pro Termux Android: cargo-deb vyžaduje pouze obecné 'target/release/'
-[package.metadata.deb.variants.termux]
-assets = [
-    ["target/release/aether", "/data/data/com.termux/files/usr/bin/aether", "755"]
-]
 
 [package.metadata.deb]
 maintainer = "Aether Developer"
