@@ -1,7 +1,7 @@
 use std::env;
 use std::fs;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod lexer;
 mod ast;
@@ -21,6 +21,9 @@ fn main() {
     if filename.is_empty() { eprintln!("Chyba: Musíš zadat cestu k .ae souboru!"); std::process::exit(1); }
 
     let contents = match fs::read_to_string(filename) { Ok(c) => c, Err(_) => { eprintln!("Chyba: Nelze přečíst soubor '{}'", filename); std::process::exit(1); } };
+    
+    // Zapínáme stopky přímo v jádru!
+    let exec_start = Instant::now();
         
     if insane_mode {
         println!("\nerror[E0596]: cannot borrow `reality` as mutable, as it is not declared as mutable");
@@ -34,24 +37,36 @@ fn main() {
         let file_size = contents.len();
         let ext = filename.split('.').last().unwrap_or("neznámý");
         
-        println!("🌌 Aether Compiler v0.1.0");
-        println!("📂 Načítám soubor: {}", filename);
-        println!("📊 Statistiky kódu: {} řádků | {} bytů | Pripona: .{}", line_count, file_size, ext);
-        println!("✨ Kód načten. Lexikální a syntaktická analýza...");
-        println!("\n🚀 Spouštím virtuální stroj Aetheru...\n");
+        // Získání systémových informací přes Rust!
+        let os_info = env::consts::OS;
+        let arch_info = env::consts::ARCH;
+        
+        println!("==================================================");
+        println!("🌌 AETHER COMPILER DIAGNOSTICS & SYSTEM INFO");
+        println!("==================================================");
+        println!("📌 Verze kompilátoru: v0.1.0-masterclass");
+        println!("🖥️  Cílový systém:     {} ({})", os_info, arch_info);
+        println!("📂 Zpracováván soubor: {}", filename);
+        println!("📊 Statistiky kódu:   {} řádků | {} bytů", line_count, file_size);
+        println!("🏷️  Typ souboru:       .{}", ext);
+        println!("==================================================");
+        println!("✨ Fáze 1: Lexikální a syntaktická analýza...");
+        println!("🚀 Fáze 2: Spouštím virtuální stroj Aetheru...\n");
     }
             
     let lexer = lexer::Lexer::new(&contents);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
     
-    // TADY TO JE! Pošleme do mozku Aetheru příkaz: "Máš povolený ukecaný režim?"
     let mut env = evaluator::Environment::new(ukecany_rezim && !insane_mode);
     let result = evaluator::eval_program(&program, &mut env);
     
     if insane_mode { println!("\n========================================\n[CRITICAL ERROR] Task failed successfully.\nV RAM zůstalo viset 128 GB dat a tvůj procesor hoří. Hodně štěstí."); std::process::exit(0); }
 
     if ukecany_rezim && !insane_mode {
+        let exec_duration = exec_start.elapsed();
+        
+        println!("\n==================================================");
         println!("--- VÝSLEDEK BĚHU PROGRAMU ---");
         match result {
             evaluator::Object::Number(n) => println!("Vrácená hodnota: {}", n),
@@ -60,6 +75,9 @@ fn main() {
             evaluator::Object::Array(arr) => println!("Vrácená hodnota: Pole (obsahuje {} polozek)", arr.len()),
             evaluator::Object::Null => println!("Program proběhl, ale nevrátil nic (Null)."),
         }
-        println!("\n✅ Hotovo.");
+        // Vytiskneme celkový čas běhu Aetheru!
+        println!("⏱️  Celkový čas běhu: {:?}", exec_duration);
+        println!("✅ Systém úspěšně ukončen.");
+        println!("==================================================");
     }
 }
