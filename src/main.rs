@@ -9,7 +9,24 @@ mod ast;
 mod parser;
 mod evaluator;
 
-// 1. ZAVÁDÍME KONFIGURAČNÍ STRUKTURU!
+// 0. CHYTRÁ DETEKCE EDITORU
+fn detect_editor() -> String {
+    // 1. Zkusíme zjistit, jestli má uživatel nastavenou systémovou proměnnou EDITOR
+    if let Ok(ed) = env::var("EDITOR") {
+        if !ed.is_empty() { return ed; }
+    }
+    // 2. Pokud ne, vyzkoušíme najít nejpoužívanější editory pomocí příkazu 'which'
+    let editors = ["nano", "vim", "nvim", "vi", "emacs"];
+    for ed in editors.iter() {
+        if let Ok(out) = Command::new("which").arg(ed).output() {
+            if out.status.success() { return ed.to_string(); }
+        }
+    }
+    // 3. Fallback, kdyby selhalo úplně všechno
+    "nano".to_string() 
+}
+
+// 1. KONFIGURAČNÍ STRUKTURA
 struct Config {
     language: String,
     auto_open_broken: bool,
@@ -19,15 +36,14 @@ struct Config {
 
 impl Config {
     fn load() -> Self {
-        // Získáme domácí složku uživatele (funguje v Linuxu i Android Termuxu)
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let config_path = format!("{}/.aether_config", home);
         
         let mut conf = Config {
-            language: "cz".to_string(),
+            language: "en".to_string(),
             auto_open_broken: false,
             auto_verbose: false,
-            editor: "nano".to_string(),
+            editor: detect_editor(), // Automatická detekce!
         };
 
         if let Ok(content) = fs::read_to_string(&config_path) {
@@ -46,10 +62,12 @@ impl Config {
                 }
             }
         } else {
-            // Pokud config ještě neexistuje, Aether ho sám vytvoří!
-            let default_cfg = "language-of-aether=cz\nauto-open-file-if-is-broken=on\nauto-stop-shut-up-compilator=off\ndefault-editor-command=nano\n";
+            // Vytvoření výchozího souboru s dynamicky nalezeným editorem a novými výchozími hodnotami
+            let default_cfg = format!(
+                "language-of-aether=en\nauto-open-file-if-is-broken=off\nauto-stop-shut-up-compilator=off\ndefault-editor-command={}\n",
+                conf.editor
+            );
             let _ = fs::write(&config_path, default_cfg);
-            conf.auto_open_broken = true;
         }
         conf
     }
@@ -59,7 +77,6 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let config = Config::load();
 
-    // 2. MAGICKÝ PŘÍKAZ PRO EDITACI CONFIGU
     if args.contains(&"--edit-config".to_string()) {
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let config_path = format!("{}/.aether_config", home);
@@ -70,7 +87,6 @@ fn main() {
 
     if args.len() < 2 { eprintln!("Použití: aether <soubor.ae> [--stop-shut-up] [--be-insane] [--edit-config]"); std::process::exit(1); }
     
-    // Spojíme ruční zapnutí s tím v configu!
     let ukecany_rezim = args.contains(&"--stop-shut-up".to_string()) || config.auto_verbose;
     let insane_mode = args.contains(&"--be-insane".to_string());
     
@@ -92,7 +108,6 @@ fn main() {
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
 
-    // 3. AUTO-OPEN KDYŽ JE SOUBOR ROZBITÝ
     if program.statements.is_empty() && !contents.trim().is_empty() {
         eprintln!("🛑 [SYNTAX ERROR] Kompilátor nedokázal přečíst kód! Zřejmě jsi udělal hrubou chybu v syntaxi.");
         if config.auto_open_broken {
