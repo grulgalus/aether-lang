@@ -1,0 +1,13 @@
+// --- TOTO JE TVŮJ PRVNÍ KOMENTÁŘ V AETHERU ---
+// Kompilátor ho při spuštění úplně ignoruje.
+actor Terminal {
+    fn run() {
+        print("Ahoj! Vita te Aether. Jak se jmenujes?")
+        
+        // Zastaví program a čeká, co uživatel napíše!
+        let jmeno = input
+        
+        print("Tesi me, " + jmeno + "!")
+        print("Aether je ted plne profi jazyk bez spamu.")
+    }
+}

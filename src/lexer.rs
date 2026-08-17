@@ -8,11 +8,25 @@ impl Lexer {
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
         if self.position >= self.input.len() { return Token::EOF; }
-        let ch = self.input[self.position];
+        
+        let mut ch = self.input[self.position];
+        let mut next_ch = if self.position + 1 < self.input.len() { self.input[self.position + 1] } else { '\0' };
+
+        // Magie pro preskakovani komentaru!
+        while ch == '/' && next_ch == '/' {
+            while self.position < self.input.len() && self.input[self.position] != '\n' {
+                self.position += 1;
+            }
+            self.skip_whitespace();
+            if self.position >= self.input.len() { return Token::EOF; }
+            ch = self.input[self.position];
+            next_ch = if self.position + 1 < self.input.len() { self.input[self.position + 1] } else { '\0' };
+        }
+
         if ch.is_alphabetic() || ch == '_' { return self.read_identifier_or_keyword(); }
         if ch.is_ascii_digit() { return self.read_number(); }
         if ch == '"' { return self.read_string(); }
-        let next_ch = if self.position + 1 < self.input.len() { self.input[self.position + 1] } else { '\0' };
+        
         match (ch, next_ch) {
             ('=', '=') | ('!', '=') | ('<', '=') | ('>', '=') | ('-', '>') => {
                 self.position += 2; return Token::Operator(format!("{}{}", ch, next_ch));

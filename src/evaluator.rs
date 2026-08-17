@@ -46,9 +46,7 @@ fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
         Stmt::Function { body, .. } => eval_block(body, env),
         Stmt::If { condition, consequence, alternative } => {
             let cond = eval_expression(condition, env);
-            let is_truthy = match cond {
-                Object::Boolean(b) => b, Object::Number(n) => n != 0.0, Object::Null => false, _ => true,
-            };
+            let is_truthy = match cond { Object::Boolean(b) => b, Object::Number(n) => n != 0.0, Object::Null => false, _ => true };
             if is_truthy { eval_block(consequence, env) } else if let Some(alt) = alternative { eval_block(alt, env) } else { Object::Null }
         }
         Stmt::While { condition, body } => {
@@ -69,7 +67,19 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
         Expr::Number(s) => Object::Number(s.parse().unwrap_or(0.0)),
         Expr::StringLit(s) => Object::StringObj(s.clone()),
         Expr::Boolean(b) => Object::Boolean(*b),
-        Expr::Identifier(s) => env.get(s).unwrap_or(Object::Null),
+        Expr::Identifier(s) => {
+            // TADY JE TA MAGIE PRO VSTUP!
+            if s == "input" {
+                let mut line = String::new();
+                std::io::stdin().read_line(&mut line).unwrap_or(0);
+                return Object::StringObj(line.trim().to_string());
+            }
+            if s == "time" {
+                let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
+                return Object::Number(t);
+            }
+            env.get(s).unwrap_or(Object::Null)
+        }
         Expr::BinaryOp { left, operator, right } => {
             let left_val = eval_expression(left, env);
             let right_val = eval_expression(right, env);
