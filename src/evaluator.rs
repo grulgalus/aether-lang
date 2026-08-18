@@ -3,7 +3,10 @@ use std::net::TcpListener;
 use std::io::{Read, Write};
 use std::process::Command;
 use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::ast::{Program, Stmt, Expr};
+use crate::lexer::Lexer; // Pro dynamické parsování v exec() a import()
+use crate::parser::Parser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object { Number(f64), StringObj(String), Boolean(bool), Array(Vec<Object>), Dict(HashMap<String, Object>), Null, Error(String) }
@@ -52,7 +55,15 @@ fn eval_statement(stmt: &Stmt, env: &mut Environment) -> Object {
         Stmt::For { variable, iterable, body } => { let iter_val = eval_expression(iterable, env); if let Object::Array(arr) = iter_val { for item in arr { env.set(variable.clone(), item); let res = eval_block(body, env); if let Object::Error(_) = res { return res; } } Object::Null } else { Object::Error("For vyžaduje pole".into()) } }
         Stmt::Expression(expr) => eval_expression(expr, env),
         Stmt::Return { value } => eval_expression(value, env),
-        Stmt::Function { .. } | Stmt::Actor { .. } | Stmt::Import(_) => Object::Null,
+        
+        // OPRAVA: Plnohodnotný IMPORT! Aether teď umí načítat kód z jiných souborů.
+        Stmt::Import(path) => {
+            if let Ok(content) = fs::read_to_string(path) {
+                let lexer = Lexer::new(&content); let mut parser = Parser::new(lexer); let prog = parser.parse_program();
+                eval_block(&prog.statements, env); Object::Null
+            } else { Object::Error(format!("Modul '{}' nenalezen!", path)) }
+        },
+        Stmt::Function { .. } | Stmt::Actor { .. } => Object::Null,
     }
 }
 
@@ -67,10 +78,12 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
             let mut eval_args = Vec::new(); 
             for arg in args { let e = eval_expression(arg, env); if let Object::Error(_) = e { return e; } eval_args.push(e); }
             match function.as_str() {
-                // ZÁKLADY
+                // POLE A TYPY
                 "len" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::Number(s.len() as f64) } else if let Some(Object::Array(arr)) = eval_args.get(0) { Object::Number(arr.len() as f64) } else { Object::Error("len() bere text/pole".into()) },
                 "str" => if let Some(obj) = eval_args.get(0) { Object::StringObj(obj.to_string_val()) } else { Object::Null },
+                "int" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::Number(s.parse().unwrap_or(0.0)) } else { Object::Error("int() bere text".into()) },
                 "push" => if let (Some(Object::Array(mut arr)), Some(val)) = (eval_args.get(0).cloned(), eval_args.get(1).cloned()) { arr.push(val); Object::Array(arr) } else { Object::Error("push() vyžaduje (pole, hodnota)".into()) },
+                "pop" => if let Some(Object::Array(mut arr)) = eval_args.get(0).cloned() { let last = arr.pop().unwrap_or(Object::Null); Object::Array(arr) } else { Object::Error("pop() vyžaduje pole".into()) },
                 
                 // TEXTY A STRINGY
                 "upper" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::StringObj(s.to_uppercase()) } else { Object::Error("upper() vyžaduje text".into()) },
@@ -80,25 +93,28 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
                 "contains" => if let (Some(Object::StringObj(s)), Some(Object::StringObj(f))) = (eval_args.get(0), eval_args.get(1)) { Object::Boolean(s.contains(f)) } else { Object::Error("contains() vyžaduje (text, hledat)".into()) },
                 "split" => if let (Some(Object::StringObj(s)), Some(Object::StringObj(d))) = (eval_args.get(0), eval_args.get(1)) { let arr = s.split(d).map(|x| Object::StringObj(x.to_string())).collect(); Object::Array(arr) } else { Object::Error("split() vyžaduje (text, oddelovac)".into()) },
 
-                // MATEMATIKA A ČÍSLA
+                // MATEMATIKA, ČAS A RANDOM
                 "sqrt" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.sqrt()) } else { Object::Error("sqrt() vyžaduje číslo".into()) },
                 "round" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.round()) } else { Object::Error("round() vyžaduje číslo".into()) },
-                "floor" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.floor()) } else { Object::Error("floor() vyžaduje číslo".into()) },
-                "ceil" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.ceil()) } else { Object::Error("ceil() vyžaduje číslo".into()) },
                 "abs" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.abs()) } else { Object::Error("abs() vyžaduje číslo".into()) },
+                "time" => { let ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(); Object::Number(ms as f64) },
+                "rand" => { let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos(); Object::Number((nanos % 100) as f64) }, // Náhodné číslo 0-99!
                 
-                // PRÁCE SE SOUBORY A SYSTÉM
+                // SOUBORY A OS
                 "read" => if let Some(Object::StringObj(p)) = eval_args.get(0) { match fs::read_to_string(p) { Ok(c) => Object::StringObj(c), Err(_) => Object::Error(format!("Soubor '{}' nenalezen!", p)) } } else { Object::Error("read() vyžaduje cestu".into()) },
                 "write" => if let (Some(Object::StringObj(p)), Some(Object::StringObj(c))) = (eval_args.get(0), eval_args.get(1)) { match fs::write(p, c) { Ok(_) => Object::Boolean(true), Err(_) => Object::Error("Chyba zápisu".into()) } } else { Object::Error("write() vyžaduje (cestu, text)".into()) },
-                "env" => if let Some(Object::StringObj(k)) = eval_args.get(0) { Object::StringObj(std::env::var(k).unwrap_or_default()) } else { Object::Error("env() vyžaduje klíč".into()) },
                 "sleep" => if let Some(Object::Number(ms)) = eval_args.get(0) { std::thread::sleep(std::time::Duration::from_millis(*ms as u64)); Object::Null } else { Object::Error("sleep() vyžaduje ms".into()) },
                 "clear" => { print!("\x1B[2J\x1B[1;1H"); let _ = std::io::stdout().flush(); Object::Null },
-
-                // SÍTĚ, API A SERVER
                 "cmd" => if let Some(Object::StringObj(c)) = eval_args.get(0) { if let Ok(out) = Command::new("sh").arg("-c").arg(c).output() { Object::StringObj(String::from_utf8_lossy(&out.stdout).trim().to_string()) } else { Object::Error("Příkaz selhal".into()) } } else { Object::Error("cmd() vyžaduje příkaz".into()) },
+                
+                // MOCNÉ VĚCI: INTERNET, SERVER, DYNAMICKÝ KÓD
+                "fetch" => if let Some(Object::StringObj(url)) = eval_args.get(0) { if let Ok(out) = Command::new("curl").arg("-s").arg(url).output() { Object::StringObj(String::from_utf8_lossy(&out.stdout).trim().to_string()) } else { Object::Error("Fetch selhal".into()) } } else { Object::Error("fetch() vyžaduje url".into()) },
                 "serve" => if let (Some(Object::Number(port)), Some(Object::StringObj(html))) = (eval_args.get(0), eval_args.get(1)) { let addr = format!("127.0.0.1:{}", *port as u16); println!("🌐 Aether Server: http://{}", addr); if let Ok(listener) = TcpListener::bind(&addr) { for stream in listener.incoming() { if let Ok(mut stream) = stream { let mut b = [0; 512]; let _ = stream.read(&mut b); let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}", html); let _ = stream.write_all(resp.as_bytes()); } } Object::Null } else { Object::Error("Port je obsazen!".into()) } } else { Object::Error("serve(port, html)".into()) },
                 "discord" => if let (Some(Object::StringObj(url)), Some(Object::StringObj(msg))) = (eval_args.get(0), eval_args.get(1)) { let json = format!(r#"{{"content": "{}"}}"#, msg); if Command::new("curl").arg("-s").arg("-H").arg("Content-Type: application/json").arg("-d").arg(&json).arg(url).status().is_ok() { Object::Boolean(true) } else { Object::Error("Discord selhal".into()) } } else { Object::Error("discord(url, msg)".into()) },
                 
+                // EXEC: Spustí text jako by to byl Aether kód! (Tohle je magie)
+                "exec" => if let Some(Object::StringObj(code)) = eval_args.get(0) { let lexer = Lexer::new(&code); let mut parser = Parser::new(lexer); let prog = parser.parse_program(); eval_block(&prog.statements, env); Object::Null } else { Object::Error("exec() vyžaduje textový kód".into()) },
+
                 _ => Object::Error(format!("Neznámá funkce '{}()'", function))
             }
         }
