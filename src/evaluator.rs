@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::io::{Read, Write};
-use std::process::Command; // PŘIDÁNO PRO TERMINÁL A DISCORD
+use std::process::Command;
+use std::fs;
 use crate::ast::{Program, Stmt, Expr};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,39 +67,39 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
             let mut eval_args = Vec::new(); 
             for arg in args { let e = eval_expression(arg, env); if let Object::Error(_) = e { return e; } eval_args.push(e); }
             match function.as_str() {
-                "len" => { if let Some(Object::StringObj(s)) = eval_args.get(0) { return Object::Number(s.len() as f64); } if let Some(Object::Array(arr)) = eval_args.get(0) { return Object::Number(arr.len() as f64); } Object::Error("len() bere text/pole".into()) },
-                "push" => { if let (Some(Object::Array(mut arr)), Some(val)) = (eval_args.get(0).cloned(), eval_args.get(1).cloned()) { arr.push(val); return Object::Array(arr); } Object::Error("push() vyžaduje (pole, hodnota)".into()) },
-                "upper" => { if let Some(Object::StringObj(s)) = eval_args.get(0) { return Object::StringObj(s.to_uppercase()); } Object::Error("upper() vyžaduje text".to_string()) },
-                "lower" => { if let Some(Object::StringObj(s)) = eval_args.get(0) { return Object::StringObj(s.to_lowercase()); } Object::Error("lower() vyžaduje text".to_string()) },
-                "str" => { if let Some(obj) = eval_args.get(0) { return Object::StringObj(obj.to_string_val()); } Object::Null },
-                "serve" => {
-                    if let (Some(Object::Number(port)), Some(Object::StringObj(html))) = (eval_args.get(0), eval_args.get(1)) {
-                        let addr = format!("127.0.0.1:{}", *port as u16); println!("🌐 Aether Server běží na http://{}", addr);
-                        if let Ok(listener) = TcpListener::bind(&addr) { for stream in listener.incoming() { if let Ok(mut stream) = stream { let mut buffer = [0; 512]; let _ = stream.read(&mut buffer); let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n{}", html); let _ = stream.write_all(response.as_bytes()); } } } else { return Object::Error(format!("Port {} je už obsazený!", port)); }
-                        return Object::Null;
-                    } Object::Error("serve() vyžaduje (číslo_portu, text_stránky)".into())
-                },
+                // ZÁKLADY
+                "len" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::Number(s.len() as f64) } else if let Some(Object::Array(arr)) = eval_args.get(0) { Object::Number(arr.len() as f64) } else { Object::Error("len() bere text/pole".into()) },
+                "str" => if let Some(obj) = eval_args.get(0) { Object::StringObj(obj.to_string_val()) } else { Object::Null },
+                "push" => if let (Some(Object::Array(mut arr)), Some(val)) = (eval_args.get(0).cloned(), eval_args.get(1).cloned()) { arr.push(val); Object::Array(arr) } else { Object::Error("push() vyžaduje (pole, hodnota)".into()) },
                 
-                // 🚀 NOVINKA: TERMINÁLOVÉ PŘÍKAZY
-                "cmd" => {
-                    if let Some(Object::StringObj(c)) = eval_args.get(0) {
-                        if let Ok(output) = Command::new("sh").arg("-c").arg(c).output() {
-                            return Object::StringObj(String::from_utf8_lossy(&output.stdout).to_string().trim().to_string());
-                        } return Object::Error("Příkaz selhal".into());
-                    } Object::Error("cmd() vyžaduje textový příkaz".into())
-                },
+                // TEXTY A STRINGY
+                "upper" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::StringObj(s.to_uppercase()) } else { Object::Error("upper() vyžaduje text".into()) },
+                "lower" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::StringObj(s.to_lowercase()) } else { Object::Error("lower() vyžaduje text".into()) },
+                "trim" => if let Some(Object::StringObj(s)) = eval_args.get(0) { Object::StringObj(s.trim().to_string()) } else { Object::Error("trim() vyžaduje text".into()) },
+                "replace" => if let (Some(Object::StringObj(s)), Some(Object::StringObj(o)), Some(Object::StringObj(n))) = (eval_args.get(0), eval_args.get(1), eval_args.get(2)) { Object::StringObj(s.replace(o, n)) } else { Object::Error("replace() vyžaduje (text, najit, nahradit)".into()) },
+                "contains" => if let (Some(Object::StringObj(s)), Some(Object::StringObj(f))) = (eval_args.get(0), eval_args.get(1)) { Object::Boolean(s.contains(f)) } else { Object::Error("contains() vyžaduje (text, hledat)".into()) },
+                "split" => if let (Some(Object::StringObj(s)), Some(Object::StringObj(d))) = (eval_args.get(0), eval_args.get(1)) { let arr = s.split(d).map(|x| Object::StringObj(x.to_string())).collect(); Object::Array(arr) } else { Object::Error("split() vyžaduje (text, oddelovac)".into()) },
+
+                // MATEMATIKA A ČÍSLA
+                "sqrt" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.sqrt()) } else { Object::Error("sqrt() vyžaduje číslo".into()) },
+                "round" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.round()) } else { Object::Error("round() vyžaduje číslo".into()) },
+                "floor" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.floor()) } else { Object::Error("floor() vyžaduje číslo".into()) },
+                "ceil" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.ceil()) } else { Object::Error("ceil() vyžaduje číslo".into()) },
+                "abs" => if let Some(Object::Number(n)) = eval_args.get(0) { Object::Number(n.abs()) } else { Object::Error("abs() vyžaduje číslo".into()) },
                 
-                // 🤖 NOVINKA: DISCORD API WEBHOOK BOT
-                "discord" => {
-                    if let (Some(Object::StringObj(url)), Some(Object::StringObj(msg))) = (eval_args.get(0), eval_args.get(1)) {
-                        // Vytvoříme JSON pro Discord
-                        let json = format!(r#"{{"content": "{}"}}"#, msg);
-                        // Pošleme ho potichu přes systémový curl
-                        let status = Command::new("curl").arg("-s").arg("-H").arg("Content-Type: application/json").arg("-d").arg(&json).arg(url).status();
-                        if status.is_ok() { return Object::Boolean(true); } else { return Object::Error("Discord API selhalo (máš v Termuxu nainstalovaný 'curl'?)".into()); }
-                    } Object::Error("discord() vyžaduje (webhook_url, zprava)".into())
-                },
-                _ => Object::Error(format!("Neznámá funkce '{}'", function))
+                // PRÁCE SE SOUBORY A SYSTÉM
+                "read" => if let Some(Object::StringObj(p)) = eval_args.get(0) { match fs::read_to_string(p) { Ok(c) => Object::StringObj(c), Err(_) => Object::Error(format!("Soubor '{}' nenalezen!", p)) } } else { Object::Error("read() vyžaduje cestu".into()) },
+                "write" => if let (Some(Object::StringObj(p)), Some(Object::StringObj(c))) = (eval_args.get(0), eval_args.get(1)) { match fs::write(p, c) { Ok(_) => Object::Boolean(true), Err(_) => Object::Error("Chyba zápisu".into()) } } else { Object::Error("write() vyžaduje (cestu, text)".into()) },
+                "env" => if let Some(Object::StringObj(k)) = eval_args.get(0) { Object::StringObj(std::env::var(k).unwrap_or_default()) } else { Object::Error("env() vyžaduje klíč".into()) },
+                "sleep" => if let Some(Object::Number(ms)) = eval_args.get(0) { std::thread::sleep(std::time::Duration::from_millis(*ms as u64)); Object::Null } else { Object::Error("sleep() vyžaduje ms".into()) },
+                "clear" => { print!("\x1B[2J\x1B[1;1H"); let _ = std::io::stdout().flush(); Object::Null },
+
+                // SÍTĚ, API A SERVER
+                "cmd" => if let Some(Object::StringObj(c)) = eval_args.get(0) { if let Ok(out) = Command::new("sh").arg("-c").arg(c).output() { Object::StringObj(String::from_utf8_lossy(&out.stdout).trim().to_string()) } else { Object::Error("Příkaz selhal".into()) } } else { Object::Error("cmd() vyžaduje příkaz".into()) },
+                "serve" => if let (Some(Object::Number(port)), Some(Object::StringObj(html))) = (eval_args.get(0), eval_args.get(1)) { let addr = format!("127.0.0.1:{}", *port as u16); println!("🌐 Aether Server: http://{}", addr); if let Ok(listener) = TcpListener::bind(&addr) { for stream in listener.incoming() { if let Ok(mut stream) = stream { let mut b = [0; 512]; let _ = stream.read(&mut b); let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{}", html); let _ = stream.write_all(resp.as_bytes()); } } Object::Null } else { Object::Error("Port je obsazen!".into()) } } else { Object::Error("serve(port, html)".into()) },
+                "discord" => if let (Some(Object::StringObj(url)), Some(Object::StringObj(msg))) = (eval_args.get(0), eval_args.get(1)) { let json = format!(r#"{{"content": "{}"}}"#, msg); if Command::new("curl").arg("-s").arg("-H").arg("Content-Type: application/json").arg("-d").arg(&json).arg(url).status().is_ok() { Object::Boolean(true) } else { Object::Error("Discord selhal".into()) } } else { Object::Error("discord(url, msg)".into()) },
+                
+                _ => Object::Error(format!("Neznámá funkce '{}()'", function))
             }
         }
         Expr::BinaryOp { left, operator, right } => {
@@ -106,7 +107,7 @@ fn eval_expression(expr: &Expr, env: &Environment) -> Object {
             let r = eval_expression(right, env); if let Object::Error(_) = r { return r; }
             if operator == "&&" { let is_l = match &l { Object::Boolean(b) => *b, Object::Number(n) => *n != 0.0, _ => true }; let is_r = match &r { Object::Boolean(b) => *b, Object::Number(n) => *n != 0.0, _ => true }; return Object::Boolean(is_l && is_r); }
             if operator == "||" { let is_l = match &l { Object::Boolean(b) => *b, Object::Number(n) => *n != 0.0, _ => true }; let is_r = match &r { Object::Boolean(b) => *b, Object::Number(n) => *n != 0.0, _ => true }; return Object::Boolean(is_l || is_r); }
-            if let (Object::Number(v1), Object::Number(v2)) = (&l, &r) { match operator.as_str() { "+" => Object::Number(v1 + v2), "-" => Object::Number(v1 - v2), "*" => Object::Number(v1 * v2), "/" => if *v2 != 0.0 { Object::Number(v1 / v2) } else { Object::Error("Dělení nulou".into()) }, "<" => Object::Boolean(v1 < v2), ">" => Object::Boolean(v1 > v2), "==" => Object::Boolean(v1 == v2), "!=" => Object::Boolean(v1 != v2), "<=" => Object::Boolean(v1 <= v2), ">=" => Object::Boolean(v1 >= v2), _ => Object::Error("Neznámý operátor".into()) } } else if let (Object::StringObj(s1), Object::StringObj(s2)) = (&l, &r) { if operator == "+" { Object::StringObj(format!("{}{}", s1, s2)) } else if operator == "==" { Object::Boolean(s1 == s2) } else if operator == "!=" { Object::Boolean(s1 != s2) } else { Object::Error("Na text nelze použít tento operátor".into()) } } else { Object::Error("Matematika vyžaduje čísla nebo spojování textu".into()) }
+            if let (Object::Number(v1), Object::Number(v2)) = (&l, &r) { match operator.as_str() { "+" => Object::Number(v1 + v2), "-" => Object::Number(v1 - v2), "*" => Object::Number(v1 * v2), "/" => if *v2 != 0.0 { Object::Number(v1 / v2) } else { Object::Error("Dělení nulou".into()) }, "<" => Object::Boolean(v1 < v2), ">" => Object::Boolean(v1 > v2), "==" => Object::Boolean(v1 == v2), "!=" => Object::Boolean(v1 != v2), "<=" => Object::Boolean(v1 <= v2), ">=" => Object::Boolean(v1 >= v2), _ => Object::Error("Neznámý operátor".into()) } } else if let (Object::StringObj(s1), Object::StringObj(s2)) = (&l, &r) { if operator == "+" { Object::StringObj(format!("{}{}", s1, s2)) } else if operator == "==" { Object::Boolean(s1 == s2) } else if operator == "!=" { Object::Boolean(s1 != s2) } else { Object::Error("Na text nelze použít tento operátor".into()) } } else { Object::Error("Matematika vyžaduje čísla nebo text".into()) }
         }
     }
 }
